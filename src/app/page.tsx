@@ -9,6 +9,7 @@ import {
   UserCheck,
   Wallet,
 } from "lucide-react";
+import { ProcessExplainer } from "@/components/ProcessExplainer";
 
 const CORE_VALIDATIONS = [
   {
@@ -57,6 +58,7 @@ export default function Home() {
             Probar la demo
             <ArrowRight className="h-4 w-4" />
           </Link>
+          <ProcessExplainer />
           <Link
             href="/login"
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-6 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-800 sm:w-auto"

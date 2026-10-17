@@ -8,7 +8,9 @@ import {
   Camera,
   CheckCircle2,
   Database,
+  Download,
   FolderOpen,
+  Link2,
   Loader2,
   Mail,
   Plus,
@@ -44,7 +46,8 @@ const PRESET_PROVIDERS = ["DevCorp", "LatamDesign", "CloudHost", "AndesConsultin
 const SOURCES = [
   { id: "odoo", label: "Odoo ERP", desc: "Sincronización de catálogos", icon: Database },
   { id: "quickbooks", label: "QuickBooks", desc: "Sincronización de catálogos", icon: Database },
-  { id: "carpeta", label: "Carpeta", desc: "Archivos compartidos", icon: FolderOpen },
+  { id: "a2", label: "a2 ERP", desc: "Sincronización de catálogos", icon: Database },
+  { id: "carpeta", label: "Carpetas de red", desc: "Archivos compartidos", icon: FolderOpen },
   { id: "correo", label: "Correo", desc: "Bandeja corporativa", icon: Mail },
 ] as const;
 
@@ -74,6 +77,8 @@ export function DemoWizard() {
   const [source, setSource] = useState<SourceId>("odoo");
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [emailLinked, setEmailLinked] = useState(false);
+  const [emailLinking, setEmailLinking] = useState(false);
 
   // Paso 2 — reglas dinámicas + whitelist.
   const [budget, setBudget] = useState(defaultCompanyRules.presupuesto_mensual_restante);
@@ -90,6 +95,8 @@ export function DemoWizard() {
   const [results, setResults] = useState<DemoResult[]>([]);
   const [justifications, setJustifications] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [erpSynced, setErpSynced] = useState<string | null>(null);
+  const [syncingErp, setSyncingErp] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -164,6 +171,27 @@ export function DemoWizard() {
       pushInvoices([finalizeDeterministicExtraction(base, effectiveRules)], sourceLabel);
     } finally {
       setConnecting(false);
+    }
+  }
+
+  async function linkEmail() {
+    setEmailLinking(true);
+    try {
+      await wait(800);
+      setEmailLinked(true);
+      setConnected(true);
+    } finally {
+      setEmailLinking(false);
+    }
+  }
+
+  async function syncErp() {
+    setSyncingErp(true);
+    try {
+      await wait(700);
+      setErpSynced(new Date().toLocaleTimeString());
+    } finally {
+      setSyncingErp(false);
     }
   }
 
@@ -305,6 +333,32 @@ export function DemoWizard() {
                 <RefreshCw className="h-3.5 w-3.5" />
                 Conectado a {sourceLabel}. Catálogo sincronizado.
               </p>
+            )}
+
+            {source === "correo" && (
+              <button
+                type="button"
+                onClick={() => void linkEmail()}
+                disabled={emailLinking || emailLinked}
+                className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 text-sm font-medium text-zinc-200 transition-all duration-200 hover:bg-zinc-800 disabled:opacity-60"
+              >
+                {emailLinking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Vinculando bandeja…
+                  </>
+                ) : emailLinked ? (
+                  <>
+                    <Link2 className="h-4 w-4 text-emerald-400" />
+                    Correo vinculado (IMAP / Google Workspace)
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="h-4 w-4" />
+                    Conectar correo (IMAP / Google Workspace)
+                  </>
+                )}
+              </button>
             )}
 
             <div className="mt-6 flex gap-2">
@@ -628,6 +682,47 @@ export function DemoWizard() {
                       </div>
                       <p className="mt-2 text-xs leading-relaxed text-zinc-500">{r.decision.razon}</p>
 
+                      {r.decision.three_way_match && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(
+                            [
+                              ["Proveedor", r.decision.three_way_match.vendor_match],
+                              ["Acuerdo", r.decision.three_way_match.agreement_match],
+                              ["Liquidez", r.decision.three_way_match.budget_liquidity_match],
+                            ] as const
+                          ).map(([label, ok]) => (
+                            <span
+                              key={label}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                ok
+                                  ? "bg-zinc-800 text-zinc-300"
+                                  : "border border-zinc-700 text-zinc-500"
+                              }`}
+                            >
+                              {ok ? (
+                                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                              ) : (
+                                <X className="h-3 w-3 text-zinc-500" />
+                              )}
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {r.decision.traza_evaluacion && r.decision.traza_evaluacion.length > 0 && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-zinc-500 hover:text-zinc-300">
+                            Traza de validación
+                          </summary>
+                          <ul className="mt-2 space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 font-mono text-[10px] leading-relaxed text-zinc-500">
+                            {r.decision.traza_evaluacion.map((t, i) => (
+                              <li key={i}>{t}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+
                       {r.decision.estado === "ESCALAR" && r.humanAction === null && (
                         <div className="mt-3 border-t border-zinc-800 pt-3">
                           <textarea
@@ -688,6 +783,66 @@ export function DemoWizard() {
               )}
             </div>
 
+            {/* Exportación y sincronización ERP */}
+            <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                Cierre del caso
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportCsv(results)}
+                  disabled={results.length === 0}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-zinc-700 px-3 text-xs font-medium text-zinc-200 transition-all duration-200 hover:bg-zinc-800 disabled:opacity-40"
+                >
+                  <Download className="h-4 w-4" />
+                  CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportJson(results)}
+                  disabled={results.length === 0}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-zinc-700 px-3 text-xs font-medium text-zinc-200 transition-all duration-200 hover:bg-zinc-800 disabled:opacity-40"
+                >
+                  <Download className="h-4 w-4" />
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={exportPdf}
+                  disabled={results.length === 0}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-zinc-700 px-3 text-xs font-medium text-zinc-200 transition-all duration-200 hover:bg-zinc-800 disabled:opacity-40"
+                >
+                  <Download className="h-4 w-4" />
+                  PDF de auditoría
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void syncErp()}
+                  disabled={results.length === 0 || syncingErp}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-950 transition-all duration-200 hover:bg-zinc-200 disabled:opacity-40"
+                >
+                  {syncingErp ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sincronizando…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4" />
+                      Sincronizar con ERP
+                    </>
+                  )}
+                </button>
+              </div>
+              {erpSynced && (
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Estado sincronizado con {sourceLabel} ({erpSynced}).
+                </p>
+              )}
+            </div>
+
             <div className="mt-6 flex gap-2">
               <button
                 type="button"
@@ -704,6 +859,8 @@ export function DemoWizard() {
                   setJustifications({});
                   setErrors({});
                   setConnected(false);
+                  setEmailLinked(false);
+                  setErpSynced(null);
                   goToStep(1);
                 }}
                 className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-all duration-200 hover:bg-zinc-200"
@@ -720,4 +877,73 @@ export function DemoWizard() {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function downloadBlob(name: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function exportCsv(results: DemoResult[]) {
+  const header = [
+    "invoice_id",
+    "emisor",
+    "monto_usd",
+    "moneda",
+    "estado",
+    "regla_disparada",
+    "razon",
+    "vendor_match",
+    "agreement_match",
+    "budget_match",
+  ];
+  const rows = results.map((r) => {
+    const m = r.decision.three_way_match;
+    return [
+      r.invoice.id,
+      r.invoice.emisor,
+      r.invoice.monto_usd ?? r.invoice.monto,
+      r.invoice.moneda,
+      r.decision.estado,
+      r.decision.regla_disparada,
+      r.decision.razon,
+      m ? m.vendor_match : "",
+      m ? m.agreement_match : "",
+      m ? m.budget_liquidity_match : "",
+    ]
+      .map(csvCell)
+      .join(",");
+  });
+  downloadBlob(
+    "jippay-auditoria.csv",
+    [header.map(csvCell).join(","), ...rows].join("\n"),
+    "text/csv;charset=utf-8",
+  );
+}
+
+function exportJson(results: DemoResult[]) {
+  const payload = results.map((r) => ({
+    invoice: r.invoice,
+    decision: r.decision,
+    humanAction: r.humanAction,
+    justification: r.justification,
+  }));
+  downloadBlob(
+    "jippay-auditoria.json",
+    JSON.stringify(payload, null, 2),
+    "application/json",
+  );
+}
+
+function exportPdf() {
+  window.print();
 }

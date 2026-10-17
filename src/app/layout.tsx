@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { SiteFooter } from "@/components/SiteFooter";
 import { StoreProvider } from "@/lib/store";
 import "./globals.css";
 
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ServiceWorkerRegister />
           <Navbar />
           <main className="flex-1 overflow-x-hidden">{children}</main>
+          <SiteFooter />
         </StoreProvider>
       </body>
     </html>

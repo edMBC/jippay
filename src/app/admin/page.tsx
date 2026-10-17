@@ -1,14 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
+  Bell,
+  Building2,
   Download,
   HardDrive,
   Plus,
   RefreshCw,
   Server,
+  ShieldCheck,
   Upload,
+  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -34,6 +38,53 @@ const PROFILES: { name: string; limite: number; presupuesto: number }[] = [
   { name: "Modo Corporativo", limite: 5000, presupuesto: 50000 },
 ];
 
+/**
+ * Configuración operativa avanzada (centros de costo, equipo y cumplimiento).
+ * Es configuración corporativa de UI; no forma parte de las reglas financieras
+ * deterministas del motor (que siguen siendo `CompanyRules`).
+ */
+interface AdvancedConfig {
+  costCenters: string[];
+  sharedAnalysts: number;
+  alertThreshold: number;
+  compliance: {
+    sox: boolean;
+    iso20022: boolean;
+    threeWayMatch: boolean;
+    antiFraud: boolean;
+  };
+}
+
+const DEFAULT_ADVANCED: AdvancedConfig = {
+  costCenters: ["Operaciones", "Tecnología", "Marketing"],
+  sharedAnalysts: 3,
+  alertThreshold: 1000,
+  compliance: {
+    sox: true,
+    iso20022: true,
+    threeWayMatch: true,
+    antiFraud: true,
+  },
+};
+
+const ADVANCED_KEY = "jippay_advanced_config";
+
+function loadAdvanced(): AdvancedConfig {
+  if (typeof window === "undefined") return DEFAULT_ADVANCED;
+  try {
+    const raw = window.localStorage.getItem(ADVANCED_KEY);
+    if (!raw) return DEFAULT_ADVANCED;
+    const parsed = JSON.parse(raw) as Partial<AdvancedConfig>;
+    return {
+      ...DEFAULT_ADVANCED,
+      ...parsed,
+      compliance: { ...DEFAULT_ADVANCED.compliance, ...(parsed.compliance ?? {}) },
+    };
+  } catch {
+    return DEFAULT_ADVANCED;
+  }
+}
+
 export default function AdminPage() {
   const {
     rules,
@@ -52,8 +103,36 @@ export default function AdminPage() {
   const [agreementProvider, setAgreementProvider] = useState("");
   const [agreementAmount, setAgreementAmount] = useState("");
   const [notify, setNotify] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState<AdvancedConfig>(loadAdvanced);
+  const [newCostCenter, setNewCostCenter] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const snapshotInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ADVANCED_KEY, JSON.stringify(advanced));
+    }
+  }, [advanced]);
+
+  const addCostCenter = () => {
+    if (!isCfo) return;
+    const name = newCostCenter.trim();
+    if (!name) return;
+    if (advanced.costCenters.some((c) => c.toLowerCase() === name.toLowerCase())) {
+      setNewCostCenter("");
+      return;
+    }
+    setAdvanced((prev) => ({ ...prev, costCenters: [...prev.costCenters, name] }));
+    setNewCostCenter("");
+  };
+
+  const removeCostCenter = (name: string) => {
+    if (!isCfo) return;
+    setAdvanced((prev) => ({
+      ...prev,
+      costCenters: prev.costCenters.filter((c) => c !== name),
+    }));
+  };
 
   const acuerdos = rules.acuerdos_por_proveedor ?? {};
   const isCfo = user?.role === "CFO_ADMIN";
@@ -308,6 +387,160 @@ export default function AdminPage() {
               {totalDecisions} decisiones · {pagarCount} PAGAR · {escalarCount} ESCALAR ·{" "}
               {frenarCount} FRENAR
             </p>
+          </IOSGlassCard>
+
+          <IOSGlassCard className="p-6 lg:col-span-2">
+            <h2 className="text-lg font-medium text-zinc-100">Opciones Avanzadas</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Configuración operativa corporativa (equipo, centros de costo y cumplimiento).
+            </p>
+
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {/* Centros de costo */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-zinc-400" />
+                  <label className="text-sm text-zinc-400">Centros de costo</label>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCostCenter}
+                    disabled={!isCfo}
+                    onChange={(e) => setNewCostCenter(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addCostCenter();
+                    }}
+                    placeholder="Añadir centro…"
+                    className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    onClick={addCostCenter}
+                    disabled={!isCfo}
+                    className="inline-flex items-center gap-1 rounded-xl bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {advanced.costCenters.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs text-zinc-200"
+                    >
+                      {c}
+                      <button
+                        onClick={() => removeCostCenter(c)}
+                        disabled={!isCfo}
+                        className="text-zinc-500 hover:text-zinc-200 disabled:opacity-40"
+                        aria-label={`Eliminar ${c}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Analistas compartidos */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Users className="h-4 w-4 text-zinc-400" />
+                  <label className="text-sm text-zinc-400">Analistas compartidos</label>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  disabled={!isCfo}
+                  value={advanced.sharedAnalysts}
+                  onChange={(e) =>
+                    setAdvanced((prev) => ({
+                      ...prev,
+                      sharedAnalysts: Math.max(1, Math.min(50, Number(e.target.value))),
+                    }))
+                  }
+                  className="w-32 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none disabled:opacity-50"
+                />
+                <p className="mt-2 text-xs text-zinc-600">
+                  Capacidad concurrente del equipo de auditoría.
+                </p>
+              </div>
+
+              {/* Umbral de alerta */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Bell className="h-4 w-4 text-zinc-400" />
+                  <label className="text-sm text-zinc-400">Umbral de alerta</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!isCfo}
+                    value={advanced.alertThreshold}
+                    onChange={(e) =>
+                      setAdvanced((prev) => ({
+                        ...prev,
+                        alertThreshold: Math.max(0, Number(e.target.value)),
+                      }))
+                    }
+                    className="w-32 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none disabled:opacity-50"
+                  />
+                  <span className="text-sm text-zinc-500">USD</span>
+                </div>
+                <p className="mt-2 text-xs text-zinc-600">
+                  Monto desde el que se notifica a los supervisores.
+                </p>
+              </div>
+
+              {/* Reglas de cumplimiento */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-zinc-400" />
+                  <label className="text-sm text-zinc-400">Reglas de cumplimiento</label>
+                </div>
+                <div className="space-y-2">
+                  {(
+                    [
+                      ["sox", "SOX — segregación de funciones"],
+                      ["iso20022", "ISO 20022 — mensajería financiera"],
+                      ["threeWayMatch", "3-Way Match — PO / recibo / factura"],
+                      ["antiFraud", "Anti-fraude — prompt injection y spoofing"],
+                    ] as const
+                  ).map(([key, label]) => {
+                    const checked = advanced.compliance[key];
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={!isCfo}
+                        onClick={() =>
+                          setAdvanced((prev) => ({
+                            ...prev,
+                            compliance: { ...prev.compliance, [key]: !checked },
+                          }))
+                        }
+                        className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-xs text-zinc-300 transition-colors hover:border-zinc-600 disabled:opacity-50"
+                      >
+                        <span>{label}</span>
+                        <span
+                          className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${
+                            checked ? "bg-zinc-200" : "bg-zinc-700"
+                          }`}
+                        >
+                          <span
+                            className={`h-4 w-4 rounded-full bg-zinc-950 transition-transform ${
+                              checked ? "translate-x-4" : "translate-x-0"
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </IOSGlassCard>
         </div>
       )}

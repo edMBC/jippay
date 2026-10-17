@@ -28,7 +28,7 @@ export default function LoginPage() {
     const user = await login(email, password);
     setSubmitting(false);
     if (user) {
-      router.push("/terminal");
+      router.push("/admin");
     } else {
       setError("Credenciales incorrectas. Usa jippay2026 como contraseña demo.");
     }
@@ -39,7 +39,7 @@ export default function LoginPage() {
     setSubmitting(true);
     const user = await loginDemo(role);
     setSubmitting(false);
-    if (user) router.push("/terminal");
+    if (user) router.push("/admin");
   };
 
   return (
