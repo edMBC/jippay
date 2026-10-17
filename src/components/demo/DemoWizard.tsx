@@ -165,6 +165,13 @@ export function DemoWizard() {
   // Selector de camino (A: factura buena / B: factura trampa) en el cierre.
   const [lane, setLane] = useState<"A" | "B">("A");
 
+  // Modo What-If: altera en caliente las reglas sobre una factura base válida.
+  const [whatIf, setWhatIf] = useState({
+    budgetBelow: false,
+    removeProvider: false,
+    lowerThreshold: false,
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const processedIdsRef = useRef<string[]>([]);
@@ -227,6 +234,57 @@ export function DemoWizard() {
 
 
   const sourceLabel = SOURCES.find((s) => s.id === source)?.label ?? "Fuente";
+
+  /**
+   * Módulo What-If: una factura base válida ($450 DevCorp) reevaluada con las
+   * reglas alteradas según los toggles. Cada cambio recalcula `evaluateInvoice`
+   * y muestra qué regla exacta rompió la condición.
+   */
+  const whatIfResult = useMemo(() => {
+    const baseInvoice = finalizeDeterministicExtraction(
+      deterministicExtract(
+        "Factura INV-204 de DevCorp por 450 USD, vence 2026-11-15, concepto: desarrollo de software",
+      ),
+      effectiveRules,
+    );
+    const monto = baseInvoice.monto_usd ?? baseInvoice.monto ?? 450;
+
+    const alteredRules: typeof rules = {
+      ...effectiveRules,
+      presupuesto_mensual_restante: whatIf.budgetBelow
+        ? Math.max(0, monto - 1)
+        : effectiveRules.presupuesto_mensual_restante,
+      proveedores_permitidos: whatIf.removeProvider
+        ? effectiveRules.proveedores_permitidos.filter(
+            (p) => p.toLowerCase() !== baseInvoice.emisor.toLowerCase(),
+          )
+        : effectiveRules.proveedores_permitidos,
+      limite_monto_automatico: whatIf.lowerThreshold
+        ? Math.max(0, monto - 1)
+        : effectiveRules.limite_monto_automatico,
+    };
+
+    const decision = evaluateInvoice(baseInvoice, alteredRules, [], [], [], () =>
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+
+    const activeChanges: string[] = [];
+    if (whatIf.budgetBelow) {
+      activeChanges.push(
+        `Presupuesto insuficiente: faltan $${(monto - alteredRules.presupuesto_mensual_restante).toFixed(2)}.`,
+      );
+    }
+    if (whatIf.removeProvider) {
+      activeChanges.push(`Proveedor "${baseInvoice.emisor}" excluido de la lista blanca.`);
+    }
+    if (whatIf.lowerThreshold) {
+      activeChanges.push(
+        `Umbral automático rebajado por debajo del monto ($${alteredRules.limite_monto_automatico}).`,
+      );
+    }
+
+    return { baseInvoice, decision, activeChanges, monto };
+  }, [effectiveRules, whatIf]);
 
   /**
    * Evalúa una factura con el historial de procesamiento acumulado (IDs y hashes),
@@ -955,6 +1013,88 @@ export function DemoWizard() {
                 </p>
               </div>
             )}
+
+            {/* Simulador What-If */}
+            <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+              <p className="text-sm font-medium text-zinc-200">¿Qué pasa si cambian las condiciones?</p>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Activa un cambio para reevaluar la factura base ({whatIfResult.baseInvoice.emisor}{" "}
+                ${whatIfResult.monto}) al instante.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {(
+                  [
+                    ["budgetBelow", "Reducir el presupuesto por debajo del monto"],
+                    ["removeProvider", "Remover al proveedor de la lista blanca"],
+                    ["lowerThreshold", "Bajar el umbral de aprobación automática"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const checked = whatIf[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setWhatIf((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left text-xs transition-all duration-200 ${
+                        checked
+                          ? "border-zinc-500 bg-zinc-900 text-zinc-100"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-600"
+                      }`}
+                    >
+                      <span>{label}</span>
+                      <span
+                        className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${
+                          checked ? "bg-zinc-200" : "bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`h-4 w-4 rounded-full bg-zinc-950 transition-transform ${
+                            checked ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                className={`mt-4 rounded-lg border p-3 transition-all duration-300 ${
+                  whatIfResult.activeChanges.length > 0
+                    ? whatIfResult.decision.estado === "FRENAR"
+                      ? "border-red-900/50 bg-red-950/20"
+                      : "border-amber-900/50 bg-amber-950/20"
+                    : "border-emerald-900/50 bg-emerald-950/30"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-zinc-300">Veredicto</span>
+                  <IOSStatusBadge estado={whatIfResult.decision.estado} />
+                </div>
+
+                {whatIfResult.activeChanges.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {whatIfResult.activeChanges.map((c) => (
+                      <li key={c} className="flex items-start gap-1.5 text-[11px] text-zinc-400">
+                        <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" />
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-[11px] leading-5 text-emerald-300">
+                    Cumplimiento total · {whatIfResult.decision.razon}
+                  </p>
+                )}
+
+                {whatIfResult.activeChanges.length > 0 && (
+                  <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                    {whatIfResult.decision.razon}
+                  </p>
+                )}
+              </div>
+            </div>
 
             {/* Demostración automática */}
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
