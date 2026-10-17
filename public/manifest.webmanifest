@@ -1,7 +1,7 @@
 {
-  "name": "Jippay - Agente Neuro-Simbólico AP",
+  "name": "Jippay - Agente de Pago Inteligente",
   "short_name": "Jippay",
-  "description": "Automatiza tus cuentas por pagar sin perder el control",
+  "description": "Auditoría automatizada de cuentas por pagar con control determinista",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -16,8 +16,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jippay - Agente Neuro-Simbólico AP",
-  description: "Automatiza tus cuentas por pagar sin perder el control",
+  title: "Jippay - Agente de Pago Inteligente",
+  description: "Auditoría automatizada de cuentas por pagar con control determinista",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

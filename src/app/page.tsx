@@ -43,9 +43,10 @@ export default function Home() {
           La IA lee. El código decide. Tú descansas.
         </p>
         <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-500">
-          Un agente neuro-simbólico: lectura inteligente de documentos combinada
-          con la seguridad del código determinista. Extrae, valida y resuelve
-          facturas a escala, sin que la IA pueda autorizar pagos ni tocar tu presupuesto.
+          Un agente de pago inteligente: lectura automatizada de documentos
+          combinada con auditoría de código determinista. Extrae, valida y
+          resuelve facturas a escala, sin que la IA pueda autorizar pagos ni
+          tocar tu presupuesto.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -107,7 +108,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Separación neuro-simbólica */}
+      {/* IA + control determinista */}
       <section className="mx-auto mt-20 max-w-2xl text-center">
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-5">
           <span className="inline-flex items-center gap-2 text-sm text-zinc-400">
