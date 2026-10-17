@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jippay - Documentación Core Full Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        zinc: {
+                            950: '#09090b',
+                            900: '#18181b',
+                            850: '#1f1f23',
+                            800: '#27272a',
+                            700: '#3f3f46',
+                            500: '#71717a',
+                            400: '#a1a1aa',
+                            300: '#d4d4d8',
+                            200: '#e4e4e7',
+                            100: '#f4f4f5',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #09090b;
+            color: #a1a1aa;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46; 
+        }
+
+        /* Hide scrollbar for mobile horizontal nav */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row h-screen overflow-hidden antialiased font-sans selection:bg-zinc-700 selection:text-zinc-100">
+
+    <!-- Notificación Toast para Copiar Código -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-zinc-100 text-zinc-950 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 pointer-events-none">
+        <svg class="w-4 h-4 text-zinc-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span id="toast-msg">Copiado al portapapeles</span>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="w-full md:w-72 bg-zinc-900 border-b md:border-b-0 md:border-r border-zinc-800 flex-shrink-0 flex flex-col justify-between">
+        <div>
+            <!-- Brand Header -->
+            <div class="p-6 border-b border-zinc-800">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-2xl font-bold text-zinc-100 tracking-tight">Jippay<span class="text-zinc-500">.</span></h1>
+                    <span class="inline-flex items-center rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] font-mono font-medium text-zinc-300 border border-zinc-700">v2.0 FullStack</span>
+                </div>
+                <p class="text-xs font-medium uppercase tracking-wider text-zinc-500 mt-1.5">Agente Neuro-Simbólico AP</p>
+                
+                <!-- Stack Pill -->
+                <div class="mt-4 pt-3 border-t border-zinc-800/80 flex flex-wrap gap-1.5">
+                    <span class="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-[10px] text-zinc-300">Next.js 15</span>
+                    <span class="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-[10px] text-zinc-300">TypeScript</span>
+                    <span class="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-[10px] text-zinc-300">Zod</span>
+                    <span class="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-[10px] text-zinc-300">Vercel</span>
+                </div>
+            </div>
+            
+            <!-- Navigation Links -->
+            <ul class="flex md:flex-col overflow-x-auto md:overflow-visible py-3 md:py-5 px-3 gap-1.5 no-scrollbar">
+                <li>
+                    <button onclick="openTab(event, 'contexto')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-100 bg-zinc-800 shadow-sm flex items-center gap-2.5 whitespace-nowrap" id="defaultOpen">
+                        <span class="text-xs font-mono text-zinc-500">01</span> Contexto y Solución
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'arquitectura')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">02</span> Arquitectura & Stack
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'vistas')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">03</span> Vistas (UI - 3 Pantallas)
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'hoja-ruta')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">04</span> Hoja de Ruta
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'reglas')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">05</span> Reglas y Esquemas (Zod)
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'limitaciones')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">06</span> Limitaciones
+                    </button>
+                </li>
+                <li>
+                    <button onclick="openTab(event, 'prompts')" class="tab-btn w-full text-left px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 flex items-center gap-2.5 whitespace-nowrap">
+                        <span class="text-xs font-mono text-zinc-500">07</span> Estilos de Prompt
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Footer Info -->
+        <div class="hidden md:block p-5 border-t border-zinc-800 bg-zinc-950/40">
+            <div class="flex items-center justify-between text-xs text-zinc-500">
+                <span>Entorno: VS Code + Continue</span>
+                <span class="w-2 h-2 rounded-full bg-zinc-300"></span>
+            </div>
+            <p class="text-[11px] text-zinc-600 mt-1">Motor de Asistencia: DeepSeek Coder</p>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-6 md:p-12 lg:p-14 bg-zinc-950">
+        <div class="max-w-4xl mx-auto pb-16">
+
+            <!-- ========================================== -->
+            <!-- TAB 1: CONTEXTO Y SOLUCIÓN                 -->
+            <!-- ========================================== -->
+            <div id="contexto" class="tab-content">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-8 border-b border-zinc-800">
+                    <div>
+                        <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 01</span>
+                        <h2 class="text-3xl font-semibold text-zinc-100 mt-1">El Reto y la Solución</h2>
+                    </div>
+                    <div class="bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-lg text-right self-start sm:self-auto">
+                        <span class="text-xs font-medium text-zinc-200 block">Stack: Next.js 15 + TS + Zod</span>
+                        <span class="text-[11px] text-zinc-500">Target de Despliegue: Vercel</span>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <!-- Tarjeta: El Problema -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+                        <h3 class="text-xl font-medium text-zinc-100 mb-3">El Problema de Confianza</h3>
+                        <p class="leading-relaxed text-zinc-400">
+                            Las empresas constituidas en EE. UU. con operaciones y contratistas en Latinoamérica procesan decenas de facturas mensuales por correo, PDF o chat. Aunque desean automatizar este flujo, <strong class="text-zinc-200">temen ceder el control financiero a sistemas probabilísticos (cajas negras)</strong>.
+                        </p>
+                        <p class="leading-relaxed text-zinc-400 mt-3">
+                            Hoy en día, el equipo de finanzas revisa manualmente cada cuenta, la compara con lo acordado y pide permisos por chat porque un LLM tradicional podría alucinar, ignorar un límite presupuestario o aprobar un pago indebido.
+                        </p>
+                    </div>
+
+                    <!-- Tarjeta: La Solución -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1.5 h-full bg-zinc-200"></div>
+                        <h3 class="text-xl font-medium text-zinc-100 mb-3 ml-2">La Solución: Jippay (Agente Neuro-Simbólico)</h3>
+                        <p class="leading-relaxed ml-2 mb-4 text-zinc-300">
+                            Jippay resuelve el cuello de botella de la confianza separando estrictamente la lectura de documentos de la toma de decisiones financieras:
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 ml-2 mt-4">
+                            <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800">
+                                <span class="text-xs font-mono uppercase text-zinc-500">1. Cerebro Lector (IA)</span>
+                                <h4 class="text-zinc-100 font-medium mt-1">Extracción Probabilística</h4>
+                                <p class="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                                    Usa DeepSeek a través de Vercel AI SDK exclusivamente para leer textos desordenados (correos, PDFs) y estructurarlos en un JSON validado con Zod.
+                                </p>
+                            </div>
+                            <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800">
+                                <span class="text-xs font-mono uppercase text-zinc-500">2. Auditor Contable (Código)</span>
+                                <h4 class="text-zinc-100 font-medium mt-1">Decisión Determinista</h4>
+                                <p class="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                                    Un motor lógico en TypeScript puro evalúa las reglas de la empresa sin alucinaciones y decide: <strong class="text-zinc-200">PAGAR</strong>, <strong class="text-zinc-200">ESCALAR</strong> o <strong class="text-zinc-200">FRENAR</strong>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cita Pitch -->
+                    <div class="bg-zinc-900/50 border border-zinc-800/80 p-5 rounded-xl text-center">
+                        <p class="text-sm font-medium text-zinc-200 italic">
+                            "Usamos la IA para leer como un humano, pero usamos código estricto para auditar como un contador."
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 2: ARQUITECTURA & STACK                -->
+            <!-- ========================================== -->
+            <div id="arquitectura" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 02</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">Arquitectura Full Stack (Opción B)</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Construcción unificada en TypeScript pensada para compilación instantánea y despliegue directo en Vercel.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Core Framework -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+                        <h3 class="text-lg font-medium text-zinc-100 mb-2 border-b border-zinc-800 pb-3 flex items-center justify-between">
+                            <span>Frontend & Backend Core</span>
+                            <span class="text-xs font-mono text-zinc-400">Next.js 15</span>
+                        </h3>
+                        <ul class="space-y-3 mt-4 text-sm">
+                            <li><strong class="text-zinc-200">Next.js 15 (App Router):</strong> Maneja tanto las 3 vistas de usuario como los Route Handlers (API serverless) en un mismo repositorio.</li>
+                            <li><strong class="text-zinc-200">TypeScript Estricto:</strong> Tipado compartido de extremo a extremo entre el motor de reglas y la interfaz gráfica.</li>
+                            <li><strong class="text-zinc-200">pnpm + Turbopack:</strong> Gestor de paquetes y empaquetador ultrarrápido para iterar en vivo durante el hackathon.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Validación Estricta -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+                        <h3 class="text-lg font-medium text-zinc-100 mb-2 border-b border-zinc-800 pb-3 flex items-center justify-between">
+                            <span>Validación y Contratos</span>
+                            <span class="text-xs font-mono text-zinc-400">Zod</span>
+                        </h3>
+                        <ul class="space-y-3 mt-4 text-sm">
+                            <li><strong class="text-zinc-200">Zod (Reemplazo de Pydantic):</strong> Actúa como el guardián de tipos en el entorno TypeScript.</li>
+                            <li><strong class="text-zinc-200">Structured Outputs:</strong> Obliga al LLM a responder estrictamente bajo el esquema <code>InvoiceSchema</code>. Si falta un dato o el tipo es incorrecto, falla de forma segura antes de llegar al motor de pagos.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Inteligencia Artificial -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+                        <h3 class="text-lg font-medium text-zinc-100 mb-2 border-b border-zinc-800 pb-3 flex items-center justify-between">
+                            <span>Inteligencia Artificial</span>
+                            <span class="text-xs font-mono text-zinc-400">DeepSeek + AI SDK</span>
+                        </h3>
+                        <ul class="space-y-3 mt-4 text-sm">
+                            <li><strong class="text-zinc-200">Vercel AI SDK:</strong> Integración limpia mediante <code>generateObject</code> conectada al modelo de DeepSeek o proveedor compatible.</li>
+                            <li><strong class="text-zinc-200">Continue + DeepSeek Coder:</strong> Asistente integrado en VS Code para generar los componentes y pruebas a alta velocidad.</li>
+                        </ul>
+                    </div>
+
+                    <!-- UI & Despliegue -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
+                        <h3 class="text-lg font-medium text-zinc-100 mb-2 border-b border-zinc-800 pb-3 flex items-center justify-between">
+                            <span>UI & Infraestructura</span>
+                            <span class="text-xs font-mono text-zinc-400">Tailwind + Vercel</span>
+                        </h3>
+                        <ul class="space-y-3 mt-4 text-sm">
+                            <li><strong class="text-zinc-200">Tailwind CSS:</strong> Diseño sobrio en escala de grises y negro (estética institucional de alta confianza).</li>
+                            <li><strong class="text-zinc-200">Vercel Edge / Serverless:</strong> Despliegue continuo con cada <code>git push</code> para que los jueces puedan probar la URL en vivo.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Comando de Inicialización -->
+                <div class="mt-6 bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-mono uppercase text-zinc-400">Comando de Inicialización del Proyecto</span>
+                        <button onclick="copyCode('cmd-init')" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded border border-zinc-700 transition-colors">Copiar comando</button>
+                    </div>
+                    <pre id="cmd-init" class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 text-xs font-mono text-zinc-300 overflow-x-auto">pnpm create next-app@latest jippay --typescript --tailwind --eslint --app --src-dir --turbo --import-alias "@/*" && cd jippay && pnpm add zod ai @ai-sdk/openai lucide-react</pre>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 3: VISTAS (UI - 3 PANTALLAS)           -->
+            <!-- ========================================== -->
+            <div id="vistas" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 03</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">Estructura de la Interfaz (3 Vistas)</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Flujo de navegación diseñado para demostrar el valor del producto a los jueces en menos de 3 minutos.</p>
+                </div>
+
+                <div class="space-y-6">
+                    <!-- Vista 1: Landing -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start">
+                        <div class="bg-zinc-950 border border-zinc-800 px-4 py-3 rounded-lg text-center flex-shrink-0 w-full md:w-40">
+                            <span class="text-xs font-mono text-zinc-500 block">VISTA 01</span>
+                            <code class="text-sm font-mono text-zinc-200 font-semibold mt-1 block">/ (Index)</code>
+                            <span class="text-[11px] text-zinc-500 mt-1 block">Landing Pitch</span>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-xl font-medium text-zinc-100 mb-2">1. Landing Page (El Pitch de Confianza)</h3>
+                            <p class="text-sm text-zinc-400 leading-relaxed mb-3">
+                                Puerta de entrada minimalista y oscura. Presenta la propuesta de valor directamente al jurado: <em>"Automatiza tus cuentas por pagar sin perder el control."</em>
+                            </p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div class="bg-zinc-950 p-3 rounded border border-zinc-800/80">
+                                    <strong class="text-zinc-200 block mb-1">Diagrama Interactivo:</strong>
+                                    Muestra visualmente la separación entre "Lectura IA" y "Auditoría por Código".
+                                </div>
+                                <div class="bg-zinc-950 p-3 rounded border border-zinc-800/80">
+                                    <strong class="text-zinc-200 block mb-1">CTAs Directos:</strong>
+                                    Botones para ir a Configurar Reglas (<code>/admin</code>) o Auditar Facturas (<code>/terminal</code>).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista 2: Admin -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start">
+                        <div class="bg-zinc-950 border border-zinc-800 px-4 py-3 rounded-lg text-center flex-shrink-0 w-full md:w-40">
+                            <span class="text-xs font-mono text-zinc-500 block">VISTA 02</span>
+                            <code class="text-sm font-mono text-zinc-200 font-semibold mt-1 block">/admin</code>
+                            <span class="text-[11px] text-zinc-500 mt-1 block">Reglas de Empresa</span>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-xl font-medium text-zinc-100 mb-2">2. Panel de Control (Administración de Reglas)</h3>
+                            <p class="text-sm text-zinc-400 leading-relaxed mb-3">
+                                Pantalla donde el director financiero define las fronteras inflexibles del agente (<code>CompanyRules</code>). Todo cambio aquí afecta inmediatamente las decisiones en la terminal.
+                            </p>
+                            <ul class="list-disc list-inside text-xs text-zinc-300 space-y-1.5 bg-zinc-950 p-3.5 rounded border border-zinc-800/80">
+                                <li><strong>Límite por Pago Automático (USD):</strong> Input numérico / slider (ej. $1,000 USD). Encima de esto se escala a un humano.</li>
+                                <li><strong>Presupuesto Mensual Restante (USD):</strong> Indicador de saldo disponible para el periodo (ej. $5,000 USD).</li>
+                                <li><strong>Maestro de Proveedores Permitidos (Whitelist):</strong> Lista editable para añadir o bloquear empresas (ej. <code>DevCorp</code>, <code>LatamDesign</code>, <code>CloudHost</code>).</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Vista 3: Terminal -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start">
+                        <div class="bg-zinc-950 border border-zinc-800 px-4 py-3 rounded-lg text-center flex-shrink-0 w-full md:w-40">
+                            <span class="text-xs font-mono text-zinc-500 block">VISTA 03</span>
+                            <code class="text-sm font-mono text-zinc-200 font-semibold mt-1 block">/terminal</code>
+                            <span class="text-[11px] text-zinc-500 mt-1 block">Motor en Vivo</span>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-xl font-medium text-zinc-100 mb-2">3. Terminal de Operaciones (Procesamiento y Auditoría)</h3>
+                            <p class="text-sm text-zinc-400 leading-relaxed mb-3">
+                                El corazón demostrable del reto. Dividido en tres bloques claros para que cualquier persona entienda qué decidió el agente y por qué sin abrir el código:
+                            </p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="bg-zinc-950 p-3 rounded border border-zinc-800/80">
+                                    <strong class="text-zinc-200 block mb-1">A. Ingesta + Casos Trampa</strong>
+                                    Área para pegar texto de facturas/correos + botones rápidos con facturas de prueba (Normal, Duplicada, Proveedor Nuevo, Exceso de Límite).
+                                </div>
+                                <div class="bg-zinc-950 p-3 rounded border border-zinc-800/80">
+                                    <strong class="text-zinc-200 block mb-1">B. Inspector JSON (IA)</strong>
+                                    Muestra en tiempo real los campos estructurados que DeepSeek extrajo del texto desordenado.
+                                </div>
+                                <div class="bg-zinc-950 p-3 rounded border border-zinc-800/80">
+                                    <strong class="text-zinc-200 block mb-1">C. Log de Auditoría</strong>
+                                    Tabla histórica con el estado (<code>PAGAR</code>, <code>ESCALAR</code>, <code>FRENAR</code>) y la explicación en lenguaje natural.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 4: HOJA DE RUTA                        -->
+            <!-- ========================================== -->
+            <div id="hoja-ruta" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 04</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">Plan de Desarrollo (Hoja de Ruta)</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Secuencia paso a paso para construir el MVP funcional sin bloqueos.</p>
+                </div>
+
+                <div class="relative border-l-2 border-zinc-800 ml-4 space-y-8 pb-4">
+                    <!-- Fase 1 -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[11px] top-1 w-5 h-5 bg-zinc-100 border-4 border-zinc-950 rounded-full"></div>
+                        <span class="text-xs font-mono text-zinc-400 uppercase">Fase 01 &bull; Base de Datos y Contratos</span>
+                        <h3 class="text-lg font-medium text-zinc-100 mt-0.5">Setup Next.js 15 & Esquemas con Zod</h3>
+                        <p class="text-sm text-zinc-400 mt-1">
+                            Inicializar el repositorio con Tailwind y crear <code>src/lib/schemas.ts</code> definiendo <code>InvoiceSchema</code>, <code>CompanyRulesSchema</code> y <code>AgentDecisionSchema</code>.
+                        </p>
+                    </div>
+
+                    <!-- Fase 2 -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[11px] top-1 w-5 h-5 bg-zinc-800 border-2 border-zinc-500 rounded-full"></div>
+                        <span class="text-xs font-mono text-zinc-400 uppercase">Fase 02 &bull; Seguridad Cero Alucinaciones</span>
+                        <h3 class="text-lg font-medium text-zinc-100 mt-0.5">Motor Determinista en TypeScript Puro</h3>
+                        <p class="text-sm text-zinc-400 mt-1">
+                            Crear <code>src/lib/engine.ts</code> con la función <code>evaluateInvoice(invoice, rules, processedIds)</code>. Evalúa duplicados, lista blanca de proveedores, presupuesto restante y límite automático, devolviendo una razón explicable.
+                        </p>
+                    </div>
+
+                    <!-- Fase 3 -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[11px] top-1 w-5 h-5 bg-zinc-800 border-2 border-zinc-500 rounded-full"></div>
+                        <span class="text-xs font-mono text-zinc-400 uppercase">Fase 03 &bull; Extracción Inteligente</span>
+                        <h3 class="text-lg font-medium text-zinc-100 mt-0.5">Agente Extractor LLM (API Route)</h3>
+                        <p class="text-sm text-zinc-400 mt-1">
+                            Implementar <code>src/app/api/process-invoice/route.ts</code> usando Vercel AI SDK conectado a DeepSeek para transformar correos o textos de facturas en el objeto JSON validado por Zod y pasarlo inmediatamente por el motor determinista.
+                        </p>
+                    </div>
+
+                    <!-- Fase 4 -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[11px] top-1 w-5 h-5 bg-zinc-800 border-2 border-zinc-500 rounded-full"></div>
+                        <span class="text-xs font-mono text-zinc-400 uppercase">Fase 04 &bull; Interfaz Full Stack</span>
+                        <h3 class="text-lg font-medium text-zinc-100 mt-0.5">Construcción de las 3 Vistas en React</h3>
+                        <p class="text-sm text-zinc-400 mt-1">
+                            Desarrollar el estado global (Context o LocalStorage sincronizado) para compartir las reglas configuradas en <code>/admin</code> con la terminal en <code>/terminal</code>, junto con la Landing en <code>/</code>.
+                        </p>
+                    </div>
+
+                    <!-- Fase 5 -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[11px] top-1 w-5 h-5 bg-zinc-800 border-2 border-zinc-500 rounded-full"></div>
+                        <span class="text-xs font-mono text-zinc-400 uppercase">Fase 05 &bull; Validación y Entrega</span>
+                        <h3 class="text-lg font-medium text-zinc-100 mt-0.5">Set de Casos Trampa y Deploy en Vercel</h3>
+                        <p class="text-sm text-zinc-400 mt-1">
+                            Precargar un catálogo de 5 facturas simuladas (incluyendo casos trampa como cobro duplicado, moneda distinta o proveedor no registrado) y desplegar en producción con Vercel.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 5: REGLAS Y ESQUEMAS (ZOD)             -->
+            <!-- ========================================== -->
+            <div id="reglas" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 05</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">División de Responsabilidades y Zod</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Reglas de negocio auditables y contratos de datos en TypeScript.</p>
+                </div>
+                
+                <!-- Dominio Probabilístico -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-zinc-100 mb-3 flex items-center">
+                        <span class="w-2.5 h-2.5 rounded-full bg-zinc-500 mr-3"></span> 1. El Dominio Probabilístico (IA Extractora)
+                    </h3>
+                    <p class="text-sm text-zinc-400 mb-4">
+                        El LLM solo está autorizado para <strong>LEER</strong> y <strong>ESTRUCTURAR</strong>. Transforma un mensaje informal como <em>"Hola equipo, adjunto cobro INV-204 de DevCorp por $650 USD por servidores AWS, vence el 2026-10-30"</em> en:
+                    </p>
+                    <pre class="bg-zinc-900 p-4 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-300 overflow-x-auto">{
+  "id": "INV-204",
+  "emisor": "DevCorp",
+  "monto": 650.0,
+  "moneda": "USD",
+  "fecha_vencimiento": "2026-10-30",
+  "concepto": "Servidores AWS"
+}</pre>
+                </div>
+
+                <!-- Dominio Determinista -->
+                <div class="mb-10">
+                    <h3 class="text-lg font-medium text-zinc-100 mb-3 flex items-center">
+                        <span class="w-2.5 h-2.5 rounded-full bg-zinc-100 mr-3 shadow-[0_0_8px_rgba(255,255,255,0.6)]"></span> 2. El Dominio Determinista (Motor de Reglas en Código)
+                    </h3>
+                    <p class="text-sm text-zinc-400 mb-4">El código puro evalúa en orden estricto las siguientes condiciones:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        <div class="bg-zinc-900 border-l-4 border-zinc-600 p-4 rounded-r-lg">
+                            <p class="font-medium text-zinc-200 text-sm">Regla 0: Factura Duplicada</p>
+                            <p class="text-xs text-zinc-400 mt-1">Si <code>invoice.id</code> ya fue procesado previamente &rarr; Estado: <strong class="text-zinc-100">FRENAR</strong>.</p>
+                        </div>
+                        <div class="bg-zinc-900 border-l-4 border-zinc-600 p-4 rounded-r-lg">
+                            <p class="font-medium text-zinc-200 text-sm">Regla 1: Proveedor Autorizado</p>
+                            <p class="text-xs text-zinc-400 mt-1">Si <code>emisor</code> no está en <code>proveedores_permitidos</code> &rarr; Estado: <strong class="text-zinc-100">FRENAR</strong>.</p>
+                        </div>
+                        <div class="bg-zinc-900 border-l-4 border-zinc-600 p-4 rounded-r-lg">
+                            <p class="font-medium text-zinc-200 text-sm">Regla 2: Presupuesto Disponible</p>
+                            <p class="text-xs text-zinc-400 mt-1">Si <code>monto &gt; presupuesto_mensual_restante</code> &rarr; Estado: <strong class="text-zinc-100">FRENAR</strong>.</p>
+                        </div>
+                        <div class="bg-zinc-900 border-l-4 border-zinc-300 p-4 rounded-r-lg">
+                            <p class="font-medium text-zinc-200 text-sm">Regla 3: Límite Automático</p>
+                            <p class="text-xs text-zinc-400 mt-1">Si <code>monto &gt; limite_monto_automatico</code> &rarr; Estado: <strong class="text-zinc-100">ESCALAR</strong> (Pide firma humana).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Esquemas Zod -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-medium text-zinc-100">3. Esquemas Oficiales en Zod (<code>src/lib/schemas.ts</code>)</h3>
+                        <button onclick="copyCode('zod-code')" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded-md border border-zinc-700 transition-colors">
+                            Copiar código Zod
+                        </button>
+                    </div>
+                    <div class="bg-zinc-900 rounded-xl p-5 overflow-x-auto border border-zinc-800">
+<pre id="zod-code" class="text-xs font-mono text-zinc-300 leading-relaxed">import { z } from 'zod';
+
+export const InvoiceSchema = z.object({
+  id: z.string().describe("Identificador único o número de la factura, ej. INV-001"),
+  emisor: z.string().describe("Nombre de la empresa o contratista que emite el cobro"),
+  monto: z.number().positive().describe("Monto total a pagar en valor numérico"),
+  moneda: z.string().default("USD").describe("Código ISO de la moneda, ej. USD, COP, MXN"),
+  fecha_vencimiento: z.string().describe("Fecha de vencimiento en formato YYYY-MM-DD"),
+  concepto: z.string().describe("Descripción breve del servicio o producto cobrado")
+});
+
+export const CompanyRulesSchema = z.object({
+  limite_monto_automatico: z.number().nonnegative(),
+  presupuesto_mensual_restante: z.number().nonnegative(),
+  proveedores_permitidos: z.array(z.string())
+});
+
+export const AgentDecisionSchema = z.object({
+  invoice_id: z.string(),
+  estado: z.enum(['PAGAR', 'ESCALAR', 'FRENAR']),
+  razon: z.string(),
+  timestamp: z.string()
+});
+
+export type Invoice = z.infer&lt;typeof InvoiceSchema&gt;;
+export type CompanyRules = z.infer&lt;typeof CompanyRulesSchema&gt;;
+export type AgentDecision = z.infer&lt;typeof AgentDecisionSchema&gt;;</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 6: LIMITACIONES                        -->
+            <!-- ========================================== -->
+            <div id="limitaciones" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 06</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">Fronteras y Limitaciones del Sistema</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Definición clara de qué entra y qué queda fuera del alcance del hackathon para mantener el foco.</p>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex items-start">
+                        <span class="text-zinc-400 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs font-mono mr-3.5 mt-0.5">NO</span>
+                        <div>
+                            <h4 class="font-medium text-zinc-100">Cero movimiento de dinero real</h4>
+                            <p class="text-sm text-zinc-400 mt-1 leading-relaxed">El sistema no se conecta a pasarelas de pago reales ni a APIs bancarias. Su entregable final es la decisión auditada y explicada.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex items-start">
+                        <span class="text-zinc-400 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs font-mono mr-3.5 mt-0.5">NO</span>
+                        <div>
+                            <h4 class="font-medium text-zinc-100">Sin KYC ni verificación legal</h4>
+                            <p class="text-sm text-zinc-400 mt-1 leading-relaxed">No verifica la identidad jurídica de las empresas ni abre cuentas bancarias. Asume que la lista blanca fue aprobada por finanzas.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex items-start">
+                        <span class="text-zinc-400 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs font-mono mr-3.5 mt-0.5">NO</span>
+                        <div>
+                            <h4 class="font-medium text-zinc-100">Cero datos reales de clientes</h4>
+                            <p class="text-sm text-zinc-400 mt-1 leading-relaxed">Por restricciones del reto, todas las facturas, nombres de proveedores y reglas operan sobre un set 100% simulado.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex items-start">
+                        <span class="text-zinc-400 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs font-mono mr-3.5 mt-0.5">NO</span>
+                        <div>
+                            <h4 class="font-medium text-zinc-100">Sin juicio subjetivo de mercado</h4>
+                            <p class="text-sm text-zinc-400 mt-1 leading-relaxed">El agente jamás aprueba una factura fuera de las reglas por iniciativa propia. Cualquier excepción exige escalamiento humano.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 7: ESTILOS DE PROMPT (CONTINUE)        -->
+            <!-- ========================================== -->
+            <div id="prompts" class="tab-content">
+                <div class="pb-6 mb-8 border-b border-zinc-800">
+                    <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">Sección 07</span>
+                    <h2 class="text-3xl font-semibold text-zinc-100 mt-1">Guía de Prompts (VS Code + Continue)</h2>
+                    <p class="text-sm text-zinc-400 mt-2">Cómo instruir a DeepSeek Coder en tu barra lateral derecha para generar el código de Next.js + TypeScript sin errores.</p>
+                </div>
+
+                <!-- Buenas prácticas en Continue -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                        <h4 class="font-mono text-xs text-zinc-100 font-bold mb-1.5">1. Inyección con @Files</h4>
+                        <p class="text-xs text-zinc-400 leading-relaxed">Escribe <code>@schemas.ts</code> en el chat de Continue antes de pedir nueva lógica para que DeepSeek respete exactamente tus tipos Zod.</p>
+                    </div>
+                    <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                        <h4 class="font-mono text-xs text-zinc-100 font-bold mb-1.5">2. Edición Inline (Ctrl+I)</h4>
+                        <p class="text-xs text-zinc-400 leading-relaxed">Selecciona una función o componente en el editor, presiona <code>Ctrl+I</code> y pide ajustes puntuales sin regenerar todo el archivo.</p>
+                    </div>
+                    <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                        <h4 class="font-mono text-xs text-zinc-100 font-bold mb-1.5">3. Salida JSON Estricta</h4>
+                        <p class="text-xs text-zinc-400 leading-relaxed">Exige siempre al LLM extractor que responda únicamente bajo el esquema Zod sin texto conversacional alrededor.</p>
+                    </div>
+                </div>
+
+                <!-- Prompts Listos para Copiar -->
+                <div class="space-y-6">
+                    <!-- Prompt 1 -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="font-mono text-sm text-zinc-100 font-semibold">Prompt 1: Crear Esquemas Zod (<code>src/lib/schemas.ts</code>)</h4>
+                            <button onclick="copyCode('prompt-1')" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded border border-zinc-700 transition-colors">Copiar Prompt</button>
+                        </div>
+                        <pre id="prompt-1" class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 text-xs font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed">Genera el contenido para el archivo `src/lib/schemas.ts` usando Zod en TypeScript para el proyecto Jippay. Necesito:
+1. `InvoiceSchema`: id (string), emisor (string), monto (number), moneda (string), fecha_vencimiento (string), concepto (string).
+2. `CompanyRulesSchema`: limite_monto_automatico (number), presupuesto_mensual_restante (number), proveedores_permitidos (array de strings).
+3. `AgentDecisionSchema`: invoice_id (string), estado (enum: 'PAGAR', 'ESCALAR', 'FRENAR'), razon (string), timestamp (string).
+Exporta también los tipos inferidos de TypeScript (`Invoice`, `CompanyRules`, `AgentDecision`).</pre>
+                    </div>
+
+                    <!-- Prompt 2 -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="font-mono text-sm text-zinc-100 font-semibold">Prompt 2: Crear Motor Determinista (<code>src/lib/engine.ts</code>)</h4>
+                            <button onclick="copyCode('prompt-2')" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded border border-zinc-700 transition-colors">Copiar Prompt</button>
+                        </div>
+                        <pre id="prompt-2" class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 text-xs font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed">@schemas.ts Crea el archivo `src/lib/engine.ts` con una función pura y determinista llamada `evaluateInvoice(invoice: Invoice, rules: CompanyRules, processedIds: string[]): AgentDecision`.
+Reglas en orden estricto:
+1. Si `invoice.id` está en `processedIds` -> retorna estado 'FRENAR' con razón explicando cobro duplicado.
+2. Si `invoice.emisor` no está en `rules.proveedores_permitidos` (comparación case-insensitive) -> retorna 'FRENAR' indicando proveedor no autorizado en lista blanca.
+3. Si `invoice.monto > rules.presupuesto_mensual_restante` -> retorna 'FRENAR' detallando presupuesto insuficiente.
+4. Si `invoice.monto > rules.limite_monto_automatico` -> retorna 'ESCALAR' explicando que supera el límite automático y requiere aprobación humana.
+5. Si cumple todo -> retorna 'PAGAR' explicando que cumple todas las reglas de la empresa.</pre>
+                    </div>
+
+                    <!-- Prompt 3 -->
+                    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="font-mono text-sm text-zinc-100 font-semibold">Prompt 3: Set de Facturas y Casos Trampa (<code>src/lib/mock-data.ts</code>)</h4>
+                            <button onclick="copyCode('prompt-3')" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded border border-zinc-700 transition-colors">Copiar Prompt</button>
+                        </div>
+                        <pre id="prompt-3" class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 text-xs font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed">@schemas.ts Crea `src/lib/mock-data.ts` con una configuración inicial `defaultCompanyRules` (límite automático: 1000, presupuesto mensual: 5000, proveedores: ['DevCorp', 'LatamDesign', 'CloudHost']) y un array `sampleRawInvoices` con 5 textos realistas de correos/facturas que cubran:
+1. Factura normal aprobable ($450 de DevCorp).
+2. Proveedor desconocido no autorizado ($300 de HackerLabs).
+3. Monto que requiere escalamiento humano ($1850 de LatamDesign).
+4. Monto que excede el presupuesto restante ($6200 de CloudHost).
+5. Cobro duplicado (mismo ID que la primera factura).</pre>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Inicializar la primera pestaña por defecto al cargar
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("defaultOpen").click();
+        });
+
+        function openTab(evt, tabName) {
+            // Ocultar todos los contenidos de pestañas
+            const tabcontent = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+
+            // Restablecer estilos de todos los botones de navegación
+            const tablinks = document.getElementsByClassName("tab-btn");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("text-zinc-100", "bg-zinc-800", "shadow-sm");
+                tablinks[i].classList.add("text-zinc-400");
+            }
+
+            // Mostrar la pestaña seleccionada y activar el botón
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.remove("text-zinc-400");
+            evt.currentTarget.classList.add("text-zinc-100", "bg-zinc-800", "shadow-sm");
+        }
+
+        // Función compatible con iFrames para copiar bloques de código
+        function copyCode(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+
+            const toast = document.getElementById("toast");
+            toast.classList.remove("translate-y-20", "opacity-0");
+            setTimeout(() => {
+                toast.classList.add("translate-y-20", "opacity-0");
+            }, 2200);
+        }
+    </script>
+</body>
+</html>

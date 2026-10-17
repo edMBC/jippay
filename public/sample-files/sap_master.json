@@ -1,0 +1,14 @@
+{
+  "proveedores_permitidos": [
+    "DevCorp",
+    "LatamDesign",
+    "CloudHost",
+    "AndesConsulting"
+  ],
+  "acuerdos_por_proveedor": {
+    "DevCorp": 800,
+    "LatamDesign": 2000,
+    "CloudHost": 1500
+  },
+  "presupuesto_mensual_restante": 5000
+}

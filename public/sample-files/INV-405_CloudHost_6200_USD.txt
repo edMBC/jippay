@@ -1,0 +1,6 @@
+Factura electronica
+ID: INV-405
+Emisor: CloudHost Inc.
+Monto: 6200.00 USD
+Fecha de vencimiento: 2026-11-30
+Concepto: Infraestructura cloud anual

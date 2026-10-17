@@ -1,0 +1,9 @@
+From: facturacion@hackerlabs.io
+To: ap@acme.com
+Subject: Factura INV-999 - HackerLabs
+Content-Type: text/plain; charset=utf-8
+
+Les enviamos la factura INV-999 de HackerLabs por consultoria de seguridad.
+Monto: $300 USD
+Vencimiento: 2026-11-20
+Concepto: Auditoria de penetracion
