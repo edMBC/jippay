@@ -20,6 +20,28 @@ body {
 
 body {
   font-family: var(--font-inter), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+@keyframes fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-slide {
+  animation: fade-slide 0.3s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-slide {
+    animation: none;
+  }
 }
 
 ::selection {
@@ -43,6 +65,78 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
+}
+
+/* ==========================================================================
+   Modo Claro (Light) — plata/perla suave, sin blanco estridente.
+   ========================================================================== */
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="light"] body {
+  background: #f4f4f5;
+  color: #3f3f46;
+}
+
+/* Superficies (tarjetas) */
+html[data-theme="light"] .bg-zinc-950,
+html[data-theme="light"] .bg-zinc-950\/80,
+html[data-theme="light"] .bg-zinc-950\/85,
+html[data-theme="light"] .bg-zinc-950\/60 {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .bg-zinc-900,
+html[data-theme="light"] .bg-zinc-900\/80,
+html[data-theme="light"] .bg-zinc-900\/85,
+html[data-theme="light"] .bg-zinc-900\/65,
+html[data-theme="light"] .bg-zinc-900\/60,
+html[data-theme="light"] .bg-zinc-900\/40 {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .bg-zinc-800 {
+  background: #e4e4e7;
+}
+
+/* Texto */
+html[data-theme="light"] .text-zinc-100,
+html[data-theme="light"] .text-zinc-200 {
+  color: #18181b;
+}
+
+html[data-theme="light"] .text-zinc-300 {
+  color: #27272a;
+}
+
+html[data-theme="light"] .text-zinc-400 {
+  color: #3f3f46;
+}
+
+html[data-theme="light"] .text-zinc-500 {
+  color: #52525b;
+}
+
+html[data-theme="light"] .text-zinc-600 {
+  color: #71717a;
+}
+
+/* Bordes */
+html[data-theme="light"] .border-zinc-700,
+html[data-theme="light"] .border-zinc-800,
+html[data-theme="light"] .border-white\/\[0\.06\],
+html[data-theme="light"] .border-white\/\[0\.08\] {
+  border-color: #e4e4e7;
+}
+
+/* Botón primario (oscuro en modo claro para mantener jerarquía) */
+html[data-theme="light"] .bg-zinc-100 {
+  background: #18181b;
+}
+
+html[data-theme="light"] .text-zinc-950 {
+  color: #fafafa;
 }
 
 /* Modo visual "Titanium High-Contrast": refuerza contraste y saturación

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "qa": "tsx scripts/run-qa-smoke.ts"
+    "qa": "tsx scripts/run-qa-smoke.ts",
+    "db:migrate": "tsx scripts/apply-migrations.ts",
+    "db:seed": "tsx scripts/apply-migrations.ts --seed"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.96",
