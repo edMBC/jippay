@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.96",
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "ai": "^7.0.143",
     "lucide-react": "^1.58.0",

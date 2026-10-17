@@ -16,6 +16,7 @@ import {
 import { defaultCompanyRules, sampleRawInvoices } from "./mock-data";
 import type { AgentDecision, CompanyRules } from "./schemas";
 import type { SessionUser, UserRole } from "./auth/roles";
+import { createSupabaseBrowserClient } from "./supabase/client";
 
 export type HumanAction = "APROBADO" | "RECHAZADO" | null;
 
@@ -455,6 +456,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    // 1. Intento con Supabase Auth (browser client) si está configurado.
+    const supabase = createSupabaseBrowserClient();
+    if (supabase) {
+      try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (!error) {
+          // La sesión ya está en cookies; refresca la identidad mapeada a membresía.
+          const meRes = await fetch("/api/auth/me");
+          if (meRes.ok) {
+            const data = (await meRes.json()) as { user: SessionUser | null };
+            if (data.user) {
+              setUser(data.user);
+              return data.user;
+            }
+          }
+        }
+      } catch {
+        // Error de red o del proveedor: se cae al fallback demo de abajo.
+      }
+    }
+
+    // 2. Fallback demo local (cuando no hay Supabase o el login Supabase falla).
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -480,9 +503,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      // Cierra la sesión de Supabase en el navegador (si aplica).
+      const supabase = createSupabaseBrowserClient();
+      if (supabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Sin conexión o sesión ya cerrada; no es crítico.
+        }
+      }
     } finally {
-      setUser(null);
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } finally {
+        setUser(null);
+      }
     }
   }, []);
 
