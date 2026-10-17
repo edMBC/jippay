@@ -2,32 +2,31 @@ import Link from "next/link";
 import {
   ArrowRight,
   BrainCircuit,
-  CheckCircle2,
-  FileText,
+  Database,
   Gavel,
+  RefreshCw,
   ShieldCheck,
-  SlidersHorizontal,
+  UserCheck,
+  Wallet,
 } from "lucide-react";
 
-const STEPS = [
+const CORE_VALIDATIONS = [
   {
-    icon: SlidersHorizontal,
-    title: "Configura tu criterio",
-    body: "Presupuesto, límite automático y proveedores autorizados. La política del CFO se vuelve la frontera del agente.",
+    icon: UserCheck,
+    title: "Proveedor autorizado",
+    body: "Identidad verificada contra la whitelist y anti-spoofing.",
   },
   {
-    icon: FileText,
-    title: "Ingiere a escala",
-    body: "CSV de ERP (Odoo/QuickBooks), PDFs, fotos de recibos y correos corporativos, normalizados en un solo flujo.",
+    icon: Wallet,
+    title: "Monto acordado",
+    body: "El importe cumple el SLA y el límite de aprobación automática.",
   },
   {
-    icon: CheckCircle2,
-    title: "Supervisa excepciones",
-    body: "Veredicto PAGAR · ESCALAR · FRENAR. Cuando una excepción lo exige, un humano firma la decisión con justificación.",
+    icon: ShieldCheck,
+    title: "Liquidez y deduplicación",
+    body: "Saldo presupuestario disponible y sin cobros duplicados.",
   },
 ] as const;
-
-const TRUST = ["ISO 20022", "3-Way Match ERP", "SOX RBAC"] as const;
 
 export default function Home() {
   return (
@@ -35,14 +34,18 @@ export default function Home() {
       {/* Hero */}
       <section className="mx-auto max-w-3xl text-center">
         <span className="font-mono text-xs uppercase tracking-widest text-zinc-500">
-          Agente neuro-simbólico de cuentas por pagar
+          Tu nuevo analista de cuentas por pagar IA · 24/7 disponible
         </span>
         <h1 className="mt-5 text-4xl font-semibold tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl">
-          La IA lee. El código decide. Tú descansas.
+          Jippay, tu agente de pago listo.
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-zinc-500 sm:text-lg">
-          Jippay extrae, valida y resuelve tus facturas bajo reglas corporativas
-          inmutables, con supervisión humana exactamente donde importa.
+        <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-zinc-500 sm:text-lg">
+          La IA lee. El código decide. Tú descansas.
+        </p>
+        <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-500">
+          Un agente neuro-simbólico: lectura inteligente de documentos combinada
+          con la seguridad del código determinista. Extrae, valida y resuelve
+          facturas a escala, sin que la IA pueda autorizar pagos ni tocar tu presupuesto.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -60,38 +63,48 @@ export default function Home() {
             Acceso
           </Link>
         </div>
+      </section>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-          {TRUST.map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-1.5 font-mono text-xs text-zinc-500"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {item}
-            </span>
-          ))}
+      {/* 3 validaciones core */}
+      <section className="mx-auto mt-20 max-w-4xl">
+        <h2 className="text-center text-sm font-medium uppercase tracking-widest text-zinc-400">
+          3 validaciones core
+        </h2>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {CORE_VALIDATIONS.map((v) => {
+            const Icon = v.icon;
+            return (
+              <div
+                key={v.title}
+                className="rounded-3xl border border-white/[0.08] bg-zinc-900/65 p-6"
+              >
+                <Icon className="h-5 w-5 text-zinc-300" />
+                <h3 className="mt-4 text-sm font-medium text-zinc-100">{v.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-zinc-500">{v.body}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* Cómo funciona */}
-      <section className="mx-auto mt-20 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
-        {STEPS.map((step, i) => {
-          const Icon = step.icon;
-          return (
-            <div
-              key={step.title}
-              className="rounded-3xl border border-white/[0.08] bg-zinc-900/65 p-6"
-            >
-              <div className="flex items-center justify-between">
-                <Icon className="h-5 w-5 text-zinc-400" />
-                <span className="font-mono text-xs text-zinc-600">0{i + 1}</span>
-              </div>
-              <h2 className="mt-4 text-sm font-medium text-zinc-100">{step.title}</h2>
-              <p className="mt-2 text-xs leading-5 text-zinc-500">{step.body}</p>
-            </div>
-          );
-        })}
+      {/* Ingesta a escala */}
+      <section className="mx-auto mt-20 max-w-3xl text-center">
+        <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-zinc-500">
+          <Database className="h-4 w-4" />
+          Ingiere a escala
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
+          Alimentado por tu ERP, en tiempo real.
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-500">
+          Jippay se alimenta constantemente de Odoo, QuickBooks, carpetas de
+          archivos y correos corporativos. El demo simula esa operación continua
+          y te deja supervisar cada excepción con un movimiento manual firmado.
+        </p>
+        <div className="mt-5 inline-flex items-center gap-2 text-xs text-zinc-600">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Sincronización continua con el ERP
+        </div>
       </section>
 
       {/* Separación neuro-simbólica */}
