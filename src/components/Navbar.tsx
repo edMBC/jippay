@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 
 const NAV_LINKS = [
-  { href: "/", label: "Demo", icon: Home },
+  { href: "/demo", label: "Demo", icon: Home },
   { href: "/terms", label: "Términos", icon: ScrollText },
 ] as const;
 
@@ -31,7 +31,7 @@ export function Navbar() {
   }, [theme]);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    pathname === href || pathname.startsWith(`${href}/`);
 
   const accessHref = user ? "/terminal" : "/login";
   const accessLabel = user ? "Terminal" : "Acceso";
