@@ -162,6 +162,9 @@ export function DemoWizard() {
   const [scenarioRunning, setScenarioRunning] = useState(false);
   const [scenarioProgress, setScenarioProgress] = useState(0);
 
+  // Selector de camino (A: factura buena / B: factura trampa) en el cierre.
+  const [lane, setLane] = useState<"A" | "B">("A");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const processedIdsRef = useRef<string[]>([]);
@@ -847,64 +850,111 @@ export function DemoWizard() {
               El motor evalúa cada factura con control determinista.
             </p>
 
-            {/* Doble flujo de decisión */}
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/30 p-4">
+            {/* Doble camino: selector de escenarios (A vs B) */}
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setLane("A")}
+                className={`rounded-xl border p-3 text-left transition-all duration-200 ${
+                  lane === "A"
+                    ? "border-emerald-500/60 bg-emerald-950/30"
+                    : "border-zinc-800 bg-zinc-950 hover:border-zinc-600"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Camino A · Factura aprobada
+                </span>
+                <span className="mt-1 block text-[11px] text-zinc-500">Veredicto PAGAR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLane("B")}
+                className={`rounded-xl border p-3 text-left transition-all duration-200 ${
+                  lane === "B"
+                    ? "border-amber-500/60 bg-amber-950/20"
+                    : "border-zinc-800 bg-zinc-950 hover:border-zinc-600"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                  <XCircle className="h-3.5 w-3.5" />
+                  Camino B · Factura trampa
+                </span>
+                <span className="mt-1 block text-[11px] text-zinc-500">Veredicto FRENAR / ESCALAR</span>
+              </button>
+            </div>
+
+            {lane === "A" && (
+              <div className="mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/30 p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    <span className="text-xs font-medium text-emerald-300">
-                      Camino A · Factura buena
-                    </span>
+                  <div>
+                    <p className="text-sm font-medium text-emerald-300">Factura aprobada</p>
+                    <p className="mt-1 font-mono text-[11px] text-zinc-400">
+                      {decisionLanes.good.invoice.id} · {decisionLanes.good.invoice.emisor} · $
+                      {decisionLanes.good.invoice.monto_usd ?? decisionLanes.good.invoice.monto}
+                    </p>
                   </div>
                   <IOSStatusBadge estado={decisionLanes.good.decision.estado} />
                 </div>
-                <p className="mt-2 font-mono text-[11px] text-zinc-400">
-                  {decisionLanes.good.invoice.id} · {decisionLanes.good.invoice.emisor} · $
-                  {decisionLanes.good.invoice.monto_usd ?? decisionLanes.good.invoice.monto}
-                </p>
-                <p className="mt-1 text-[11px] leading-5 text-zinc-400">
-                  ISO 20022:{" "}
-                  <span className="text-emerald-300">
-                    {decisionLanes.good.decision.iso20022_status ?? "—"}
-                  </span>{" "}
-                  · 3-Way Match:{" "}
-                  {decisionLanes.good.decision.three_way_match?.vendor_match &&
-                  decisionLanes.good.decision.three_way_match.agreement_match &&
-                  decisionLanes.good.decision.three_way_match.budget_liquidity_match
-                    ? "completo"
-                    : "parcial"}
-                </p>
-                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+
+                <div className="mt-3 space-y-1 text-[11px] leading-5">
+                  <p className="text-zinc-400">
+                    Proveedor en lista blanca · presupuesto disponible · 3-Way Match · confianza
+                    &gt; 75%
+                  </p>
+                  <p className="text-zinc-400">
+                    ISO 20022:{" "}
+                    <span className="font-mono text-emerald-300">
+                      {decisionLanes.good.decision.iso20022_status ?? "—"}
+                    </span>
+                  </p>
+                  <p className="text-zinc-400">
+                    3-Way Match:{" "}
+                    {decisionLanes.good.decision.three_way_match?.vendor_match &&
+                    decisionLanes.good.decision.three_way_match.agreement_match &&
+                    decisionLanes.good.decision.three_way_match.budget_liquidity_match
+                      ? "completo (ERP · SLA · FX)"
+                      : "parcial"}
+                  </p>
+                </div>
+
+                <p className="mt-3 text-[11px] leading-5 text-zinc-500">
                   {decisionLanes.good.decision.razon}
                 </p>
               </div>
+            )}
 
-              <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+            {lane === "B" && (
+              <div className="mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-amber-400" />
-                    <span className="text-xs font-medium text-amber-300">
-                      Camino B · Factura trampa
-                    </span>
+                  <div>
+                    <p className="text-sm font-medium text-amber-300">Factura trampa</p>
+                    <p className="mt-1 font-mono text-[11px] text-zinc-400">
+                      {decisionLanes.bad.invoice.id} · {decisionLanes.bad.invoice.emisor} · $
+                      {decisionLanes.bad.invoice.monto_usd ?? decisionLanes.bad.invoice.monto}
+                    </p>
                   </div>
                   <IOSStatusBadge estado={decisionLanes.bad.decision.estado} />
                 </div>
-                <p className="mt-2 font-mono text-[11px] text-zinc-400">
-                  {decisionLanes.bad.invoice.id} · {decisionLanes.bad.invoice.emisor} · $
-                  {decisionLanes.bad.invoice.monto_usd ?? decisionLanes.bad.invoice.monto}
-                </p>
-                <p className="mt-1 text-[11px] leading-5 text-zinc-400">
-                  Regla:{" "}
-                  <span className="text-amber-300">
-                    {decisionLanes.bad.decision.regla_disparada}
-                  </span>
-                </p>
-                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+
+                <div className="mt-3 space-y-1 text-[11px] leading-5">
+                  <p className="text-zinc-400">
+                    Caso trampa detectado · regla{" "}
+                    <span className="font-mono text-amber-300">
+                      {decisionLanes.bad.decision.regla_disparada}
+                    </span>
+                  </p>
+                </div>
+
+                <p className="mt-3 text-[11px] leading-5 text-zinc-500">
                   {decisionLanes.bad.decision.razon}
                 </p>
+
+                <p className="mt-3 text-[10px] leading-4 text-zinc-600">
+                  La excepción queda bloqueada a la espera de justificación humana con control SOX.
+                </p>
               </div>
-            </div>
+            )}
 
             {/* Demostración automática */}
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
