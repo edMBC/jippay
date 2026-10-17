@@ -1,5 +1,6 @@
 import type { AgentDecision, CompanyRules, Invoice, ThreeWayMatch } from "./schemas";
 import { ISO20022_STATUS_MAP } from "./schemas";
+import { getJurisdictionRules } from "./jurisdictions";
 import {
   compositeFingerprint,
   convertToUsd,
@@ -380,6 +381,35 @@ export function evaluateInvoice(
       "REGLA_3_LIMITE_AUTO",
       `El monto $${montoUsd} supera el límite de aprobación automática de $${rules.limite_monto_automatico}. Requiere aprobación humana.`,
     );
+  }
+
+  // Regla 7bis: legislación fiscal de la jurisdicción seleccionada.
+  // Es un control aditivo: nunca debilita las reglas anteriores. Refleja en la
+  // traza qué normativas locales aplican y escala por retención cuando el monto
+  // supera el umbral de la jurisdicción.
+  const jurisdiction = getJurisdictionRules(rules.pais);
+  if (jurisdiction) {
+    const requerimientos = [
+      `identificación fiscal: ${jurisdiction.identificacion_fiscal}`,
+      jurisdiction.factura_electronica_obligatoria
+        ? "factura electrónica obligatoria"
+        : "factura electrónica no obligatoria",
+    ];
+    traza.push(
+      `JURISDICCION: ${jurisdiction.nombre} (${jurisdiction.id}) — ${jurisdiction.normativas.join("; ")}`,
+    );
+    traza.push(`JURISDICCION_REQUISITOS: ${requerimientos.join("; ")}`);
+
+    if (
+      jurisdiction.retencion_umbral_usd != null &&
+      montoUsd >= jurisdiction.retencion_umbral_usd
+    ) {
+      return build(
+        "ESCALAR",
+        "REGLA_JURISDICCION_RETENCION",
+        `En ${jurisdiction.nombre}, el monto $${montoUsd} alcanza el umbral de revisión de retención ($${jurisdiction.retencion_umbral_usd}). Se escala para verificar la retención de impuestos aplicable.`,
+      );
+    }
   }
 
   // Regla 8: cumplimiento total.

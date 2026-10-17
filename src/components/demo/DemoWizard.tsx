@@ -13,6 +13,7 @@ import {
   Link2,
   Loader2,
   Mail,
+  Play,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -25,8 +26,10 @@ import {
 import { evaluateInvoice } from "@/lib/engine";
 import { deterministicExtract, finalizeDeterministicExtraction } from "@/lib/extractor";
 import { ingestFile } from "@/lib/multimodal-ingestor";
-import { defaultCompanyRules, sampleRawInvoices } from "@/lib/mock-data";
-import type { AgentDecision, CompanyRules, Invoice } from "@/lib/schemas";
+import { getJurisdictionRules, listJurisdictions } from "@/lib/jurisdictions";
+import { sampleRawInvoices } from "@/lib/mock-data";
+import type { AgentDecision, Invoice } from "@/lib/schemas";
+import { useStore } from "@/lib/store";
 import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
 
@@ -66,6 +69,44 @@ const LIVE_PREVIEW_SAMPLES = [
 const STEP_LABELS = ["Fuente", "Criterios", "Ingesta", "Auditoría"] as const;
 
 /**
+ * Escenarios precargados para la "Demostración Automática". Reutilizan los
+ * casos reales del motor: normales y trampa. El orden importa: el duplicado se
+ * procesa después de la factura original para que la deduplicación sea visible.
+ */
+const SCENARIOS = [
+  {
+    label: "Factura normal aprobable",
+    rawText:
+      "De: facturacion@devcorp.io\nPara: ap@acme.com\nAsunto: Factura INV-204 - Servicios de desarrollo\n\nMonto total: $450 USD\nFecha de vencimiento: 2026-11-15\nConcepto: Desarrollo de módulo de pagos.",
+  },
+  {
+    label: "Cobro duplicado (mismo ID)",
+    rawText:
+      "De: facturacion@devcorp.io\nPara: ap@acme.com\nAsunto: Recordatorio de pago INV-204\n\nMonto total: $450 USD\nFecha de vencimiento: 2026-11-15\nConcepto: Desarrollo de módulo de pagos.",
+  },
+  {
+    label: "Beneficiario no autorizado",
+    rawText:
+      "Hola equipo,\nLes enviamos la factura INV-999 de HackerLabs por consultoría de seguridad.\nMonto: $300 USD\nVencimiento: 2026-11-20\nConcepto: Auditoría de penetración.",
+  },
+  {
+    label: "Monto anómalo (formato europeo)",
+    rawText:
+      "Hola,\nNos debes esta factura INV-811.\nEl importe asciende a 1.250,00 USD.\nVence el 15/11/2026.\nGracias,\nDevCorp.",
+  },
+  {
+    label: "Supera límite automático",
+    rawText:
+      "Mensaje de WhatsApp (LatamDesign): Hola! Les paso la factura INV-301 por el rediseño completo.\nTotal: $1850 USD\nVence: 2026-12-01\nConcepto: Rediseño de identidad de marca.",
+  },
+  {
+    label: "Presupuesto insuficiente",
+    rawText:
+      "Factura electrónica\nID: INV-405\nEmisor: CloudHost Inc.\nMonto: 6200.00 USD\nFecha de vencimiento: 2026-11-30\nConcepto: Infraestructura cloud anual.",
+  },
+] as const;
+
+/**
  * Demo interactiva en 4 pasos. Usa el motor determinista real (`evaluateInvoice`)
  * y los extractores/ingestores reales: los veredictos no son estáticos. No escribe
  * en el ledger financiero (eso corresponde a la Terminal autenticada).
@@ -80,11 +121,12 @@ export function DemoWizard() {
   const [emailLinked, setEmailLinked] = useState(false);
   const [emailLinking, setEmailLinking] = useState(false);
 
-  // Paso 2 — reglas dinámicas + whitelist.
-  const [budget, setBudget] = useState(defaultCompanyRules.presupuesto_mensual_restante);
-  const [limit, setLimit] = useState(defaultCompanyRules.limite_monto_automatico);
+  // Reglas compartidas con /admin y /terminal: los cambios persisten en el store
+  // (misma fuente de verdad), no son estado local simulado.
+  const { rules, updateRules } = useStore();
+
+  // Paso 2 — criterios operativos de UI (no forman parte de CompanyRules).
   const [analysts, setAnalysts] = useState(3);
-  const [providers, setProviders] = useState<string[]>(defaultCompanyRules.proveedores_permitidos);
   const [newProvider, setNewProvider] = useState("");
 
   // Paso 3 — ingesta.
@@ -98,22 +140,22 @@ export function DemoWizard() {
   const [erpSynced, setErpSynced] = useState<string | null>(null);
   const [syncingErp, setSyncingErp] = useState(false);
 
+  // Demostración automática (escenarios precargados).
+  const [scenarioRunning, setScenarioRunning] = useState(false);
+  const [scenarioProgress, setScenarioProgress] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const processedIdsRef = useRef<string[]>([]);
+  const processedHashesRef = useRef<string[]>([]);
 
-  const effectiveRules = useMemo<CompanyRules>(
-    () => ({
-      limite_monto_automatico: limit,
-      presupuesto_mensual_restante: budget,
-      proveedores_permitidos: providers,
-      acuerdos_por_proveedor: defaultCompanyRules.acuerdos_por_proveedor,
-    }),
-    [budget, limit, providers],
-  );
+  const effectiveRules = rules;
+
+  const jurisdiction = getJurisdictionRules(rules.pais);
 
   const customProviders = useMemo(
-    () => providers.filter((p) => !PRESET_PROVIDERS.includes(p)),
-    [providers],
+    () => rules.proveedores_permitidos.filter((p) => !PRESET_PROVIDERS.includes(p)),
+    [rules.proveedores_permitidos],
   );
 
   // Validación en tiempo real: el motor evalúa muestras con las reglas vigentes.
@@ -132,34 +174,91 @@ export function DemoWizard() {
 
   const sourceLabel = SOURCES.find((s) => s.id === source)?.label ?? "Fuente";
 
-  function pushInvoices(invoices: Invoice[], sourceName: string) {
-    const rows: DemoResult[] = invoices.map((invoice) => ({
-      id: `${invoice.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  /**
+   * Evalúa una factura con el historial de procesamiento acumulado (IDs y hashes),
+   * de modo que la deduplicación por identidad comercial y por hash es real.
+   */
+  function decide(invoice: Invoice): AgentDecision {
+    return evaluateInvoice(
       invoice,
-      decision: evaluateInvoice(invoice, effectiveRules, [], [], [], () =>
-        new Date("2026-01-01T00:00:00.000Z"),
-      ),
-      source: sourceName,
-      humanAction: null,
-    }));
-    setResults((prev) => [...rows.reverse(), ...prev]);
+      effectiveRules,
+      processedIdsRef.current,
+      [],
+      processedHashesRef.current,
+      () => new Date("2026-01-01T00:00:00.000Z"),
+    );
+  }
+
+  function remember(invoice: Invoice) {
+    if (invoice.id) processedIdsRef.current.push(invoice.id);
+    const hash = invoice.fileHash?.trim().toLowerCase();
+    if (hash) processedHashesRef.current.push(hash);
+  }
+
+  function pushInvoices(invoices: Invoice[], sourceName: string) {
+    const rows: DemoResult[] = invoices.map((invoice) => {
+      const decision = decide(invoice);
+      remember(invoice);
+      return {
+        id: `${invoice.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        invoice,
+        decision,
+        source: sourceName,
+        humanAction: null,
+      };
+    });
+    setResults((prev) => [...rows, ...prev]);
+  }
+
+  async function runScenarios() {
+    if (scenarioRunning) return;
+    setScenarioRunning(true);
+    setScenarioProgress(0);
+    try {
+      const rows: DemoResult[] = [];
+      for (const scenario of SCENARIOS) {
+        await wait(450);
+        const base = deterministicExtract(scenario.rawText);
+        const invoice = finalizeDeterministicExtraction(base, effectiveRules);
+        const decision = decide(invoice);
+        remember(invoice);
+        rows.push({
+          id: `${invoice.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          invoice,
+          decision,
+          source: scenario.label,
+          humanAction: null,
+        });
+        setScenarioProgress((n) => n + 1);
+      }
+      setResults((prev) => [...rows, ...prev]);
+    } finally {
+      setScenarioRunning(false);
+    }
   }
 
   function addProvider() {
     const name = newProvider.trim();
     if (!name) return;
-    setProviders((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    if (rules.proveedores_permitidos.some((p) => p.toLowerCase() === name.toLowerCase())) {
+      setNewProvider("");
+      return;
+    }
+    updateRules({ proveedores_permitidos: [...rules.proveedores_permitidos, name] });
     setNewProvider("");
   }
 
   function togglePreset(name: string) {
-    setProviders((prev) =>
-      prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name],
-    );
+    const next = rules.proveedores_permitidos.includes(name)
+      ? rules.proveedores_permitidos.filter((p) => p !== name)
+      : [...rules.proveedores_permitidos, name];
+    updateRules({ proveedores_permitidos: next });
   }
 
   function removeCustom(name: string) {
-    setProviders((prev) => prev.filter((p) => p !== name));
+    updateRules({
+      proveedores_permitidos: rules.proveedores_permitidos.filter((p) => p !== name),
+    });
   }
 
   async function connectSource() {
@@ -281,10 +380,35 @@ export function DemoWizard() {
         {/* Paso 1 — Fuente de datos */}
         {step === 1 && (
           <IOSGlassCard className="p-6 sm:p-8">
-            <h2 className="text-lg font-medium text-zinc-100">Fuente de datos</h2>
+            <h2 className="text-lg font-medium text-zinc-100">Fuente de datos y jurisdicción</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Conecta el origen que alimenta al agente de forma continua.
+              Conecta el origen y selecciona el país que define la legislación aplicable.
             </p>
+
+            <div className="mt-5">
+              <label className="mb-1.5 block text-sm text-zinc-400">País / Jurisdicción</label>
+              <select
+                value={rules.pais ?? ""}
+                onChange={(e) => updateRules({ pais: e.target.value || undefined })}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+              >
+                <option value="">Sin jurisdicción específica</option>
+                {listJurisdictions().map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.nombre} ({j.id})
+                  </option>
+                ))}
+              </select>
+              {jurisdiction && (
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {jurisdiction.identificacion_fiscal} ·{" "}
+                  {jurisdiction.factura_electronica_obligatoria
+                    ? "factura electrónica obligatoria"
+                    : "sin exigencia de factura electrónica"}{" "}
+                  · {jurisdiction.normativas.join(" · ")}
+                </p>
+              )}
+            </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               {SOURCES.map((s) => {
@@ -386,15 +510,19 @@ export function DemoWizard() {
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <label className="text-sm text-zinc-400">Presupuesto mensual</label>
-                  <span className="font-mono text-sm text-zinc-100">${budget.toLocaleString()}</span>
+                  <span className="font-mono text-sm text-zinc-100">
+                    ${rules.presupuesto_mensual_restante.toLocaleString()}
+                  </span>
                 </div>
                 <input
                   type="range"
                   min={1000}
                   max={50000}
                   step={500}
-                  value={budget}
-                  onChange={(e) => setBudget(Number(e.target.value))}
+                  value={rules.presupuesto_mensual_restante}
+                  onChange={(e) =>
+                    updateRules({ presupuesto_mensual_restante: Number(e.target.value) })
+                  }
                   className="w-full accent-zinc-300"
                 />
               </div>
@@ -402,15 +530,19 @@ export function DemoWizard() {
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <label className="text-sm text-zinc-400">Umbral de aprobación automática</label>
-                  <span className="font-mono text-sm text-zinc-100">${limit.toLocaleString()}</span>
+                  <span className="font-mono text-sm text-zinc-100">
+                    ${rules.limite_monto_automatico.toLocaleString()}
+                  </span>
                 </div>
                 <input
                   type="range"
                   min={200}
                   max={5000}
                   step={100}
-                  value={limit}
-                  onChange={(e) => setLimit(Number(e.target.value))}
+                  value={rules.limite_monto_automatico}
+                  onChange={(e) =>
+                    updateRules({ limite_monto_automatico: Number(e.target.value) })
+                  }
                   className="w-full accent-zinc-300"
                 />
               </div>
@@ -443,7 +575,7 @@ export function DemoWizard() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {PRESET_PROVIDERS.map((p) => {
-                  const active = providers.includes(p);
+                  const active = rules.proveedores_permitidos.includes(p);
                   return (
                     <button
                       key={p}
@@ -636,6 +768,86 @@ export function DemoWizard() {
             <p className="mt-1 text-xs text-zinc-500">
               El motor evalúa cada factura con control determinista.
             </p>
+
+            {/* Doble flujo de decisión */}
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/30 p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs font-medium text-emerald-300">
+                    Camino A · Aprobación
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-400">
+                  Confianza &gt; 75% · cruza presupuesto, PO y 3-Way Match ·{" "}
+                  <span className="text-emerald-300">PAGAR</span> con ISO 20022.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-amber-400" />
+                  <span className="text-xs font-medium text-amber-300">
+                    Camino B · Frenado / Escalado
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-zinc-400">
+                  Duplicados, montos fuera de política o presupuesto insuficiente ·{" "}
+                  <span className="text-amber-300">FRENAR</span> /{" "}
+                  <span className="text-amber-300">ESCALAR</span> con justificación humana.
+                </p>
+              </div>
+            </div>
+
+            {/* Demostración automática */}
+            <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Demostración automática</p>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Ejecuta un lote precargado con casos normales y casos trampa.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runScenarios()}
+                  disabled={scenarioRunning}
+                  className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-zinc-100 px-3 text-xs font-semibold text-zinc-950 transition-all duration-200 hover:bg-zinc-200 disabled:opacity-60"
+                >
+                  {scenarioRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Procesando {scenarioProgress}/{SCENARIOS.length}…
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Ejecutar lote automático
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <ul className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {SCENARIOS.map((s, i) => (
+                  <li key={s.label} className="flex items-center gap-2 text-[11px] text-zinc-500">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${
+                        scenarioRunning && i < scenarioProgress
+                          ? "bg-zinc-200 text-zinc-950"
+                          : "border border-zinc-700 text-zinc-600"
+                      }`}
+                    >
+                      {scenarioRunning && i < scenarioProgress ? (
+                        <CheckCircle2 className="h-3 w-3" />
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    {s.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             {/* Validación en tiempo real */}
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
@@ -861,6 +1073,9 @@ export function DemoWizard() {
                   setConnected(false);
                   setEmailLinked(false);
                   setErpSynced(null);
+                  setScenarioProgress(0);
+                  processedIdsRef.current = [];
+                  processedHashesRef.current = [];
                   goToStep(1);
                 }}
                 className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-all duration-200 hover:bg-zinc-200"

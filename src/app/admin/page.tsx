@@ -22,6 +22,7 @@ import {
   IOSSegmentedControl,
   type SegmentedOption,
 } from "@/components/ui/IOSSegmentedControl";
+import { getJurisdictionRules, listJurisdictions } from "@/lib/jurisdictions";
 import { useStore, type SnapshotData } from "@/lib/store";
 
 type AdminTab = "reglas" | "erp" | "db";
@@ -135,6 +136,7 @@ export default function AdminPage() {
   };
 
   const acuerdos = rules.acuerdos_por_proveedor ?? {};
+  const jurisdiction = getJurisdictionRules(rules.pais);
   const isCfo = user?.role === "CFO_ADMIN";
 
   const totalDecisions = decisions.length;
@@ -266,6 +268,44 @@ export default function AdminPage() {
       {/* TAB: REGLAS */}
       {tab === "reglas" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <IOSGlassCard className="p-6 lg:col-span-2">
+            <h2 className="text-lg font-medium text-zinc-100">Jurisdicción Fiscal</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Selecciona el país para aplicar su legislación local en las validaciones.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <select
+                disabled={!isCfo}
+                value={rules.pais ?? ""}
+                onChange={(e) => updateRules({ pais: e.target.value || undefined })}
+                className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Sin jurisdicción específica</option>
+                {listJurisdictions().map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.nombre} ({j.id})
+                  </option>
+                ))}
+              </select>
+              {jurisdiction && (
+                <span className="font-mono text-xs text-zinc-500">
+                  {jurisdiction.identificacion_fiscal} ·{" "}
+                  {jurisdiction.factura_electronica_obligatoria
+                    ? "factura electrónica obligatoria"
+                    : "sin exigencia de factura electrónica"}
+                </span>
+              )}
+            </div>
+            {jurisdiction && (
+              <p className="mt-3 text-xs leading-5 text-zinc-500">
+                Normativas aplicables: {jurisdiction.normativas.join(" · ")}
+                {jurisdiction.retencion_umbral_usd != null
+                  ? ` · retención desde $${jurisdiction.retencion_umbral_usd}`
+                  : ""}
+              </p>
+            )}
+          </IOSGlassCard>
+
           <IOSGlassCard className="p-6">
             <h2 className="text-lg font-medium text-zinc-100">Límite de Aprobación Automática</h2>
             <p className="mt-1 text-xs text-zinc-500">

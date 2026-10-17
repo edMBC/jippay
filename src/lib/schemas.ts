@@ -81,6 +81,7 @@ export const CompanyRulesSchema = z.object({
   presupuesto_mensual_restante: z.number().nonnegative(),
   proveedores_permitidos: z.array(z.string()),
   acuerdos_por_proveedor: z.record(z.string(), z.number()).optional(),
+  pais: z.string().optional().describe("Código ISO de la jurisdicción fiscal (ej. US, CO, CL, MX, ES, VE)"),
 });
 
 /**

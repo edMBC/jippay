@@ -30,7 +30,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM company_memberships
     WHERE company_id = p_company_id
-      AND auth_user_id = auth.uid()
+      AND auth_user_id = auth.uid()::text
       AND status = 'active'
   );
 $$;
@@ -45,7 +45,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM company_memberships
     WHERE company_id = p_company_id
-      AND auth_user_id = auth.uid()
+      AND auth_user_id = auth.uid()::text
       AND status = 'active'
       AND role = ANY(p_roles)
   );
@@ -73,7 +73,7 @@ CREATE POLICY companies_select ON companies
 
 DROP POLICY IF EXISTS memberships_select ON company_memberships;
 CREATE POLICY memberships_select ON company_memberships
-  FOR SELECT USING (auth_user_id = auth.uid());
+  FOR SELECT USING (auth_user_id = auth.uid()::text);
 
 DROP POLICY IF EXISTS rules_select ON company_rules;
 CREATE POLICY rules_select ON company_rules
