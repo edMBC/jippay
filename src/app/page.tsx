@@ -72,34 +72,31 @@ export default function Home() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-      {/* Hero estilo Apple Keynote */}
+      {/* Hero limpio y directo */}
       <section className="mx-auto max-w-3xl text-center">
         <span className="font-mono text-xs uppercase tracking-widest text-zinc-500">
           Agente Neuro-Simbólico AP
         </span>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-100 sm:text-6xl">
-          Jippay.
+        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl">
+          La IA lee. El código decide. Tú descansas.
         </h1>
-        <p className="mt-2 text-xl font-light text-zinc-400 sm:text-2xl">
-          Lee con IA. Decide con Código.
-        </p>
-        <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-500">
-          Automatiza tus cuentas por pagar sin perder el control: la lectura es
-          probabilística, la auditoría es determinista y cada pago queda explicado.
+        <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-500 sm:text-base">
+          Jippay interpreta tus facturas con IA y las audita con un motor determinista:
+          cada decisión queda explicada, trazable y dentro de política.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="/admin"
+            href="/login"
             className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-zinc-100 px-6 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
           >
-            Configurar Reglas
+            Probar la demo
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/terminal"
             className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-6 text-sm font-semibold text-zinc-200 transition-colors hover:bg-zinc-800"
           >
-            Auditar Facturas
+            Abrir Terminal
             <Terminal className="h-4 w-4" />
           </Link>
         </div>
