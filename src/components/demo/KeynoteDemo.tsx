@@ -52,7 +52,7 @@ const BAD_RAW =
   "Factura INV-777 de DevC0rp por 450 USD, vence 2026-11-15, concepto: servicios de desarrollo";
 
 export function KeynoteDemo() {
-  const { rules } = useStore();
+  const { rules, updateRules } = useStore();
   const [stage, setStage] = useState<Stage>(0);
   const [playing, setPlaying] = useState(false);
   const [whatIf, setWhatIf] = useState({
@@ -283,7 +283,7 @@ export function KeynoteDemo() {
             </div>
           </div>
 
-          {/* Pie: motor determinista + What-If */}
+          {/* Pie: motor determinista + controles + What-If */}
           <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -301,6 +301,58 @@ export function KeynoteDemo() {
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reiniciar
               </button>
+            </div>
+
+            {/* Panel de control rápido (presupuesto + whitelist) */}
+            <div className="mt-4 grid grid-cols-1 gap-4 border-t border-zinc-800 pt-4 lg:grid-cols-2">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs text-zinc-400">Presupuesto corporativo</span>
+                  <span className="font-mono text-xs text-zinc-100">
+                    ${rules.presupuesto_mensual_restante.toLocaleString()}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={200}
+                  max={20000}
+                  step={100}
+                  value={rules.presupuesto_mensual_restante}
+                  onChange={(e) =>
+                    updateRules({ presupuesto_mensual_restante: Number(e.target.value) })
+                  }
+                  className="w-full accent-emerald-400"
+                />
+              </div>
+
+              <div>
+                <span className="mb-2 block text-xs text-zinc-400">Whitelist de proveedores</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {["DevCorp", "LatamDesign", "CloudHost", "AndesConsulting"].map((p) => {
+                    const active = rules.proveedores_permitidos.includes(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() =>
+                          updateRules({
+                            proveedores_permitidos: active
+                              ? rules.proveedores_permitidos.filter((x) => x !== p)
+                              : [...rules.proveedores_permitidos, p],
+                          })
+                        }
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200 ${
+                          active
+                            ? "bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-400/40"
+                            : "border border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* What-If */}
