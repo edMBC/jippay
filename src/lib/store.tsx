@@ -9,24 +9,62 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { evaluateInvoice } from "./engine";
 import {
   exportReconciliationCsv,
   exportReconciliationJson,
 } from "./erp/erp-connector";
-import { extractInvoiceFromText } from "./extractor";
-import { ingestFile } from "./multimodal-ingestor";
 import { defaultCompanyRules, sampleRawInvoices } from "./mock-data";
 import type { AgentDecision, CompanyRules } from "./schemas";
-import { compositeFingerprint } from "./security";
 import type { SessionUser, UserRole } from "./auth/roles";
 
 export type HumanAction = "APROBADO" | "RECHAZADO" | null;
+
+/** Resultado de enviar una aprobación/rechazo al servidor. */
+export interface ApprovalSubmitResult {
+  ok: boolean;
+  error?: string;
+  flowStatus?: "APPROVED_FOR_PAYMENT" | "REJECTED";
+  approvedBy?: string;
+}
 
 export interface DecisionRecord {
   decision: AgentDecision;
   rawText: string;
   humanAction: HumanAction;
+  flowStatus?: string;
+  reservationStatus?: string | null;
+}
+
+/** Factura financiera confirmada devuelta por el backend. */
+export interface FinancialItem {
+  invoiceId: string;
+  emisor: string;
+  montoUsd: number;
+  moneda: string;
+  fechaVencimiento: string;
+  fileHash: string | null;
+  estado: string;
+  reglaDisparada: string;
+  razon: string;
+  flowStatus: string;
+  reservationStatus: string | null;
+  approvedBy: string | null;
+  approvalAction: "APPROVE" | "REJECT" | null;
+  justification: string | null;
+  createdAt: string;
+}
+
+/** Resumen presupuestario autoritativo (del ledger, no de localStorage). */
+export interface BudgetSummary {
+  demoMode: boolean;
+  approvedCents: number;
+  consumedCents: number;
+  reservedCents: number;
+  availableCents: number;
+  approvedUsd: string;
+  consumedUsd: string;
+  reservedUsd: string;
+  availableUsd: string;
 }
 
 export interface DbHealth {
@@ -65,16 +103,21 @@ interface StoreValue {
   processedFileHashes: string[];
   loading: boolean;
   dbHealth: DbHealth | null;
+  /** Presupuesto autoritativo del ledger (null si no se ha hidratado). */
+  budget: BudgetSummary | null;
+  /** True si el backend opera en modo demostración (sin persistencia transaccional). */
+  demoMode: boolean;
   updateRules: (patch: Partial<CompanyRules>) => void;
   resetRules: () => void;
   processText: (rawText: string) => Promise<AgentDecision | null>;
   processFile: (file: File) => Promise<AgentDecision | null>;
   processBatch: () => Promise<void>;
-  resolveEscalated: (
+  submitApproval: (
     record: DecisionRecord,
     action: Exclude<HumanAction, null>,
-    note?: string,
-  ) => void;
+    justification: string,
+  ) => Promise<ApprovalSubmitResult>;
+  hydrateFinancials: () => Promise<void>;
   clearDecisions: () => void;
   erpSync: (provider?: string, csv?: string) => Promise<ErpSyncResult | null>;
   checkDbHealth: () => Promise<void>;
@@ -119,12 +162,37 @@ function persist(key: string, value: unknown): void {
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-function applyPaySideEffects(decision: AgentDecision, rules: CompanyRules): CompanyRules {
-  if (decision.estado !== "PAGAR") return rules;
-  const monto = decision.factura?.monto_usd ?? decision.factura?.monto ?? 0;
+/** Convierte un ítem financiero del backend en un registro visual de la terminal. */
+function toDecisionRecord(item: FinancialItem): DecisionRecord {
   return {
-    ...rules,
-    presupuesto_mensual_restante: Math.max(0, rules.presupuesto_mensual_restante - monto),
+    rawText: "",
+    humanAction:
+      item.approvalAction === "APPROVE"
+        ? "APROBADO"
+        : item.approvalAction === "REJECT"
+          ? "RECHAZADO"
+          : null,
+    flowStatus: item.flowStatus,
+    reservationStatus: item.reservationStatus,
+    decision: {
+      invoice_id: item.invoiceId,
+      estado: item.estado as AgentDecision["estado"],
+      regla_disparada: item.reglaDisparada,
+      razon: item.razon,
+      timestamp: item.createdAt,
+      approved_by: item.approvedBy ?? undefined,
+      approval_note: item.justification ?? undefined,
+      factura: {
+        id: item.invoiceId,
+        emisor: item.emisor,
+        monto: item.montoUsd,
+        monto_usd: item.montoUsd,
+        moneda: item.moneda,
+        fecha_vencimiento: item.fechaVencimiento,
+        concepto: item.razon,
+        fileHash: item.fileHash ?? undefined,
+      },
+    } as AgentDecision,
   };
 }
 
@@ -146,6 +214,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const [loading, setLoading] = useState(false);
   const [dbHealth, setDbHealth] = useState<DbHealth | null>(null);
+  const [budget, setBudget] = useState<BudgetSummary | null>(null);
+  const [demoMode, setDemoMode] = useState(true);
   const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => persist(STORAGE_KEYS.rules, rules), [rules]);
@@ -159,29 +229,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => persist(STORAGE_KEYS.processedFileHashes, processedFileHashes),
     [processedFileHashes],
   );
-
-  const recordPaid = useCallback((decision: AgentDecision) => {
-    if (decision.estado !== "PAGAR") return;
-    setProcessedIds((prev) =>
-      prev.includes(decision.invoice_id) ? prev : [...prev, decision.invoice_id],
-    );
-    const factura = decision.factura;
-    if (factura) {
-      const fingerprint = compositeFingerprint(
-        factura.emisor,
-        factura.monto_usd ?? factura.monto,
-        factura.fecha_vencimiento,
-      );
-      setProcessedFingerprints((prev) =>
-        prev.includes(fingerprint) ? prev : [...prev, fingerprint],
-      );
-      if (factura.fileHash) {
-        setProcessedFileHashes((prev) =>
-          prev.includes(factura.fileHash as string) ? prev : [...prev, factura.fileHash as string],
-        );
-      }
-    }
-  }, []);
 
   const updateRules = useCallback((patch: Partial<CompanyRules>) => {
     setRules((prev) => ({ ...prev, ...patch }));
@@ -202,6 +249,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setProcessedFileHashes([]);
   }, []);
 
+  // Hidratación autoritativa desde el backend (facturas + presupuesto).
+  const hydrateFinancials = useCallback(async () => {
+    try {
+      const [invoicesRes, budgetRes] = await Promise.all([
+        fetch("/api/finance/invoices"),
+        fetch("/api/finance/budget"),
+      ]);
+      if (invoicesRes.ok) {
+        const data = (await invoicesRes.json()) as { items?: FinancialItem[]; demoMode?: boolean };
+        setDecisions((data.items ?? []).map(toDecisionRecord));
+        setDemoMode(data.demoMode ?? true);
+      }
+      if (budgetRes.ok) {
+        const data = (await budgetRes.json()) as BudgetSummary;
+        setBudget(data);
+        setDemoMode(data.demoMode);
+      }
+    } catch {
+      // Sin conexión: se conserva la caché visual.
+    }
+  }, []);
+
   const processText = useCallback(
     async (rawText: string): Promise<AgentDecision | null> => {
       setLoading(true);
@@ -209,45 +278,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         let decision: AgentDecision | null = null;
 
         try {
-          const response = await fetch("/api/process-invoice", {
+          const response = await fetch("/api/finance/reserve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              rawText,
-              rules,
-              processedIds,
-              processedFingerprints,
-              processedFileHashes,
-            }),
+            body: JSON.stringify({ rawText }),
           });
           if (response.ok) {
-            const data = (await response.json()) as { decision: AgentDecision };
-            decision = data.decision;
+            const data = (await response.json()) as {
+              ok?: boolean;
+              decision?: { estado: AgentDecision["estado"]; regla_disparada: string; razon: string };
+              invoiceId?: string;
+            };
+            if (data.ok && data.decision) {
+              decision = {
+                invoice_id: data.invoiceId ?? "",
+                estado: data.decision.estado,
+                regla_disparada: data.decision.regla_disparada,
+                razon: data.decision.razon,
+                timestamp: new Date().toISOString(),
+              } as AgentDecision;
+            }
           }
         } catch {
-          // Cae al procesamiento local.
+          // Sin conexión: sin decisión financiera confirmada.
         }
 
-        if (!decision) {
-          const invoice = await extractInvoiceFromText(rawText, rules);
-          decision = evaluateInvoice(
-            invoice,
-            rules,
-            processedIds,
-            processedFingerprints,
-            processedFileHashes,
-          );
-        }
-
-        setDecisions((prev) => [{ decision: decision as AgentDecision, rawText, humanAction: null }, ...prev]);
-        setRules((prev) => applyPaySideEffects(decision as AgentDecision, prev));
-        recordPaid(decision as AgentDecision);
+        await hydrateFinancials();
         return decision;
       } finally {
         setLoading(false);
       }
     },
-    [rules, processedIds, processedFingerprints, processedFileHashes, recordPaid],
+    [hydrateFinancials],
   );
 
   const processFile = useCallback(
@@ -255,119 +317,98 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         let decision: AgentDecision | null = null;
-        let rawText = `Archivo: ${file.name}`;
 
         try {
           const formData = new FormData();
           formData.append("file", file);
-          formData.append("rules", JSON.stringify(rules));
-          formData.append("processedIds", JSON.stringify(processedIds));
-          formData.append("processedFingerprints", JSON.stringify(processedFingerprints));
-          formData.append("processedFileHashes", JSON.stringify(processedFileHashes));
 
-          const response = await fetch("/api/ingest-file", {
+          const response = await fetch("/api/finance/reserve", {
             method: "POST",
             body: formData,
           });
           if (response.ok) {
             const data = (await response.json()) as {
-              decision: AgentDecision;
-              rawText?: string;
+              ok?: boolean;
+              decision?: { estado: AgentDecision["estado"]; regla_disparada: string; razon: string };
+              invoiceId?: string;
             };
-            decision = data.decision;
-            rawText = data.rawText ?? rawText;
+            if (data.ok && data.decision) {
+              decision = {
+                invoice_id: data.invoiceId ?? "",
+                estado: data.decision.estado,
+                regla_disparada: data.decision.regla_disparada,
+                razon: data.decision.razon,
+                timestamp: new Date().toISOString(),
+              } as AgentDecision;
+            }
           }
         } catch {
-          // Cae al procesamiento local ante fallo de red.
+          // Sin conexión: sin decisión financiera confirmada.
         }
 
-        if (!decision) {
-          const buffer = new Uint8Array(await file.arrayBuffer());
-          const ingested = await ingestFile(buffer, file.name);
-          rawText = ingested.rawText;
-          decision = evaluateInvoice(
-            ingested.invoice,
-            rules,
-            processedIds,
-            processedFingerprints,
-            processedFileHashes,
-          );
-        }
-
-        setDecisions((prev) => [{ decision: decision as AgentDecision, rawText, humanAction: null }, ...prev]);
-        setRules((prev) => applyPaySideEffects(decision as AgentDecision, prev));
-        recordPaid(decision as AgentDecision);
+        await hydrateFinancials();
         return decision;
       } finally {
         setLoading(false);
       }
     },
-    [rules, processedIds, processedFingerprints, processedFileHashes, recordPaid],
+    [hydrateFinancials],
   );
 
   const processBatch = useCallback(async () => {
     setLoading(true);
     try {
-      let currentRules = rules;
-      const ids: string[] = [];
-      const fingerprints: string[] = [];
-      const hashes: string[] = [];
-      const newRecords: DecisionRecord[] = [];
-
-      for (const sample of sampleRawInvoices) {
-        const invoice = await extractInvoiceFromText(sample.rawText, currentRules);
-        const decision = evaluateInvoice(invoice, currentRules, ids, fingerprints, hashes);
-        newRecords.push({ decision, rawText: sample.rawText, humanAction: null });
-
-        if (decision.estado === "PAGAR") {
-          currentRules = applyPaySideEffects(decision, currentRules);
-          if (!ids.includes(decision.invoice_id)) ids.push(decision.invoice_id);
-          const fingerprint = compositeFingerprint(
-            invoice.emisor,
-            invoice.monto_usd ?? invoice.monto,
-            invoice.fecha_vencimiento,
-          );
-          if (!fingerprints.includes(fingerprint)) fingerprints.push(fingerprint);
-        }
-      }
-
-      setDecisions((prev) => [...newRecords.reverse(), ...prev]);
-      setRules(currentRules);
-      setProcessedIds(ids);
-      setProcessedFingerprints(fingerprints);
-      setProcessedFileHashes(hashes);
+      await fetch("/api/finance/reserve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch: sampleRawInvoices.map((s) => s.rawText) }),
+      });
+      await hydrateFinancials();
     } finally {
       setLoading(false);
     }
-  }, [rules]);
+  }, [hydrateFinancials]);
 
-  const resolveEscalated = useCallback(
-    (record: DecisionRecord, action: Exclude<HumanAction, null>, note?: string) => {
-      const approvedBy = user ? `${user.email} (${user.role})` : "desconocido";
-      setDecisions((prev) =>
-        prev.map((item) =>
-          item.decision.invoice_id === record.decision.invoice_id &&
-          item.decision.estado === "ESCALAR" &&
-          item.humanAction === null
-            ? {
-                ...item,
-                humanAction: action,
-                decision: {
-                  ...item.decision,
-                  approved_by: approvedBy,
-                  approval_note: note?.trim() || undefined,
-                },
-              }
-            : item,
-        ),
-      );
+  // Aprobación/rechazo humano: SIEMPRE confirmado en el servidor. No se producen
+  // efectos financieros en el cliente (se eliminó el bypass local de Prompt 03).
+  const submitApproval = useCallback(
+    async (
+      record: DecisionRecord,
+      action: Exclude<HumanAction, null>,
+      justification: string,
+    ): Promise<ApprovalSubmitResult> => {
+      try {
+        const response = await fetch("/api/finance/approvals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoiceId: record.decision.invoice_id,
+            action: action === "APROBADO" ? "APPROVE" : "REJECT",
+            justification,
+          }),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          status?: string;
+          error?: string;
+          record?: { nextFlowStatus?: "APPROVED_FOR_PAYMENT" | "REJECTED" };
+        };
 
-      if (action === "APROBADO") {
-        setRules((prev) => applyPaySideEffects(record.decision, prev));
-        recordPaid(record.decision);
+        if (!response.ok || !data.ok) {
+          return { ok: false, error: data.error ?? `El servidor denegó la acción (HTTP ${response.status})` };
+        }
+
+        const approvedBy = user ? `${user.email} (${user.role})` : "desconocido";
+
+        // Refresca el estado desde el backend (fuente autoritativa).
+        await hydrateFinancials();
+
+        return { ok: true, flowStatus: data.record?.nextFlowStatus, approvedBy };
+      } catch {
+        return { ok: false, error: "No se pudo conectar con el servidor de aprobaciones" };
       }
     },
-    [recordPaid, user],
+    [user, hydrateFinancials],
   );
 
   const erpSync = useCallback(
@@ -445,7 +486,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Sincroniza la sesión al montar (cookie HttpOnly + fallback demo).
+  // Sincroniza la sesión al montar (cookie HttpOnly + fallback demo) y hidrata
+  // facturas + presupuesto desde el backend (fuente autoritativa).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/me")
@@ -456,10 +498,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         // Sin conexión; se conserva la sesión previa.
       });
+    const timer = window.setTimeout(() => {
+      void hydrateFinancials();
+    }, 0);
     return () => {
+      window.clearTimeout(timer);
       cancelled = true;
     };
-  }, []);
+  }, [hydrateFinancials]);
 
   const exportCsv = useCallback(
     () => exportReconciliationCsv(decisions.map((d) => d.decision)),
@@ -502,12 +548,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       processedFileHashes,
       loading,
       dbHealth,
+      budget,
+      demoMode,
       updateRules,
       resetRules,
       processText,
       processFile,
       processBatch,
-      resolveEscalated,
+      submitApproval,
+      hydrateFinancials,
       clearDecisions,
       erpSync,
       checkDbHealth,
@@ -529,12 +578,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       processedFileHashes,
       loading,
       dbHealth,
+      budget,
+      demoMode,
       updateRules,
       resetRules,
       processText,
       processFile,
       processBatch,
-      resolveEscalated,
+      submitApproval,
+      hydrateFinancials,
       clearDecisions,
       erpSync,
       checkDbHealth,

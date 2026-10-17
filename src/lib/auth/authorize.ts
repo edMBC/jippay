@@ -1,5 +1,8 @@
 import { getSessionUser, type SessionUser } from "./session";
 import type { UserRole } from "./roles";
+import { resolveRequestIdentity, type VerifiedIdentity } from "./identity";
+import type { TransactionalLedger } from "../finance/ledger";
+import type { CompanyMembership } from "../finance/model";
 
 /**
  * Resultado de la autorización server-side.
@@ -24,9 +27,67 @@ export function authorize(request: Request, allowedRoles: ReadonlyArray<UserRole
 }
 
 /** Respuesta JSON predecible y sin información sensible para denegaciones. */
-export function deniedResponse(status: 401 | 403): Response {
-  return Response.json(
-    { error: status === 401 ? "No autenticado" : "No autorizado" },
-    { status },
-  );
+export function deniedResponse(status: 401 | 403 | 503): Response {
+  const message =
+    status === 401 ? "No autenticado" : status === 403 ? "No autorizado" : "Servicio de identidad no disponible";
+  return Response.json({ error: message }, { status });
+}
+
+/**
+ * Contexto de autorización completo derivado de una identidad verificada y una
+ * membresía persistente activa. Usado por las rutas financieras.
+ */
+export interface AuthorizedContext {
+  identity: VerifiedIdentity;
+  membership: CompanyMembership;
+  companyId: string;
+  role: string;
+  demo: boolean;
+}
+
+export type AuthorizeResult =
+  | { ok: true; context: AuthorizedContext }
+  | { ok: false; status: 401 | 403 | 503 };
+
+/**
+ * Autorización financiera con membresía verificada (asíncrona).
+ *
+ * Orden:
+ *   1. Resuelve la identidad verificada (Supabase Auth, o demo en no-producción).
+ *   2. En producción, una identidad demo se deniega.
+ *   3. Resuelve la membresía activa persistente por `auth_user_id`.
+ *   4. Comprueba el rol dentro de la membresía.
+ */
+export async function authorizeWithMembership(
+  ledger: TransactionalLedger,
+  request: Request,
+  allowedRoles: ReadonlyArray<UserRole>,
+): Promise<AuthorizeResult> {
+  const identity = await resolveRequestIdentity(request);
+  if (!identity) return { ok: false, status: 401 };
+
+  if (process.env.NODE_ENV === "production" && identity.provider === "demo") {
+    return { ok: false, status: 401 };
+  }
+
+  const membership = await ledger.getActiveMembershipByAuthUser(identity.userId);
+  if (!membership) {
+    // Sin membresía persistente verificada: denegado (no se inventa empresa).
+    return { ok: false, status: 403 };
+  }
+
+  if (!allowedRoles.includes(membership.role as UserRole)) {
+    return { ok: false, status: 403 };
+  }
+
+  return {
+    ok: true,
+    context: {
+      identity,
+      membership,
+      companyId: membership.companyId,
+      role: membership.role,
+      demo: identity.provider === "demo",
+    },
+  };
 }

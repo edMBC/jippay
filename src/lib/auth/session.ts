@@ -20,18 +20,21 @@ export const DEMO_USERS: Record<string, SessionUser> = {
     email: "cfo@jippay.us",
     role: "CFO_ADMIN",
     company: "Jippay US",
+    company_id: "jippay-us",
     name: "CFO Admin",
   },
   "controller@jippay.us": {
     email: "controller@jippay.us",
     role: "CONTROLLER_APPROVER",
     company: "Jippay US",
+    company_id: "jippay-us",
     name: "Finance Controller",
   },
   "auditor@jippay.us": {
     email: "auditor@jippay.us",
     role: "AUDITOR_VIEWER",
     company: "External Audit",
+    company_id: "jippay-us",
     name: "ISO/SOX Auditor",
   },
 };

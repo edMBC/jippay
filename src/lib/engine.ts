@@ -11,6 +11,94 @@ import {
 } from "./security";
 
 /**
+ * Códigos de razón asociados a la calidad documental. Se agrupan para impedir
+ * que una factura escalada por calidad insuficiente produzca efectos financieros.
+ */
+export const DOCUMENT_QUALITY_RULES = new Set([
+  "REGLA_CONFIANZA_BAJA",
+  "REGLA_CONFIANZA_INVALIDA",
+  "REGLA_CONFIANZA_NO_VERIFICABLE",
+  "REGLA_CAMPO_AMBIGUO",
+  "REGLA_DOCUMENTO_NO_PROCESABLE",
+] as const);
+
+export function isDocumentQualityRule(regla: string): boolean {
+  return DOCUMENT_QUALITY_RULES.has(
+    regla as (typeof DOCUMENT_QUALITY_RULES extends Set<infer T> ? T : never),
+  );
+}
+
+export interface QualityAssessment {
+  ok: boolean;
+  regla?: string;
+  razon?: string;
+}
+
+/**
+ * Control determinista de calidad documental (Regla C).
+ * - Confianza ausente / no numérica -> no verificable.
+ * - NaN / Infinity / fuera de 0-100 -> inválida.
+ * - < 75 -> baja.
+ * - Campos críticos sin evidencia -> ambigüedad.
+ * Cualquiera de estos casos impide la autorización automática (ESCALAR).
+ */
+export function evaluateDocumentQuality(invoice: Invoice): QualityAssessment {
+  if (invoice.documento_no_procesable === true) {
+    return {
+      ok: false,
+      regla: "REGLA_DOCUMENTO_NO_PROCESABLE",
+      razon: "No se pudo extraer información financiera suficiente del documento. Requiere revisión humana o entrada manual.",
+    };
+  }
+
+  const score = invoice.confidence_score;
+
+  if (score == null || typeof score !== "number") {
+    return {
+      ok: false,
+      regla: "REGLA_CONFIANZA_NO_VERIFICABLE",
+      razon: "La confianza de extracción no es verificable (ausente o de tipo incorrecto).",
+    };
+  }
+  if (!Number.isFinite(score) || score < 0 || score > 100) {
+    return {
+      ok: false,
+      regla: "REGLA_CONFIANZA_INVALIDA",
+      razon: `La confianza de extracción es inválida (${score}); debe estar entre 0 y 100.`,
+    };
+  }
+  if (score < 75) {
+    return {
+      ok: false,
+      regla: "REGLA_CONFIANZA_BAJA",
+      razon: `La confianza de extracción es ${score}/100, inferior al umbral de 75. Requiere revisión humana.`,
+    };
+  }
+
+  const criticalFields = invoice.critical_fields;
+  if (!criticalFields) {
+    return {
+      ok: false,
+      regla: "REGLA_CAMPO_AMBIGUO",
+      razon: "No existe evidencia determinista por campo crítico. Requiere revisión humana.",
+    };
+  }
+
+  const ambiguous = (Object.keys(criticalFields) as (keyof typeof criticalFields)[]).filter(
+    (key) => criticalFields[key] === false,
+  );
+  if (ambiguous.length > 0) {
+    return {
+      ok: false,
+      regla: "REGLA_CAMPO_AMBIGUO",
+      razon: `Campos críticos con evidencia insuficiente: ${ambiguous.join(", ")}. Requiere revisión humana.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
  * Triple Cruce Contable (3-Way Match): proveedor, acuerdo y liquidez.
  * Independiente del orden de reglas y testeable de forma aislada.
  */
@@ -63,13 +151,15 @@ export function computeThreeWayMatch(
 /**
  * Motor determinista de auditoría: cero IA, cero aleatoriedad.
  * Evalúa las reglas de negocio en orden estricto e inflexible:
- *   0. Alerta de seguridad / prompt injection / monto inválido  -> FRENAR
- *   1. Cobro duplicado (ID, hash de archivo o huella compuesta) -> FRENAR
- *   2. Proveedor no autorizado o spoofing                       -> FRENAR
- *   3. Presupuesto insuficiente                                 -> FRENAR
- *   4. Discrepancia con acuerdo en ERP                          -> ESCALAR
- *   5. Supera límite de aprobación automática                   -> ESCALAR
- *   6. Cumplimiento total                                       -> PAGAR
+ *   0. Prompt injection / monto inválido (solo si fiable)       -> FRENAR
+ *   1. Duplicado por hash exacto de archivo                     -> FRENAR
+ *   2. Calidad documental / confianza insuficiente              -> ESCALAR
+ *   3. Duplicado por ID o huella compuesta (datos ya fiables)   -> FRENAR
+ *   4. Proveedor no autorizado o spoofing                       -> FRENAR
+ *   5. Presupuesto insuficiente                                 -> FRENAR
+ *   6. Discrepancia con acuerdo en ERP                          -> ESCALAR
+ *   7. Supera límite de aprobación automática                   -> ESCALAR
+ *   8. Cumplimiento total                                       -> PAGAR
  */
 export function evaluateInvoice(
   invoice: Invoice,
@@ -126,26 +216,26 @@ export function evaluateInvoice(
     );
   }
 
-  // Regla 0: seguridad e invariante de monto.
-  const montoInvalido = !Number.isFinite(invoice.monto) || invoice.monto <= 0;
+  // Regla 0: seguridad — la detección de prompt injection tiene prioridad máxima.
   const promptInjection =
     detectPromptInjection(invoice.concepto) || invoice.security_alert === true;
+
+  // Un importe solo se considera "inválido" cuando fue extraído de forma fiable.
+  // Si el importe es desconocido (sin evidencia), no es un fraude: se deriva a
+  // revisión humana en la regla de calidad, no se bloquea como importe inválido.
+  const montoDesconocido = invoice.critical_fields?.monto_reliable === false;
+  const montoInvalido =
+    !montoDesconocido && (!Number.isFinite(invoice.monto) || invoice.monto <= 0);
+
   traza.push(
     `REGLA_0_SEGURIDAD: ${
-      montoInvalido
-        ? "monto inválido"
-        : promptInjection
-          ? "alerta de seguridad detectada"
+      promptInjection
+        ? "alerta de seguridad detectada"
+        : montoInvalido
+          ? "monto inválido"
           : "sin alertas"
     }`,
   );
-  if (montoInvalido) {
-    return build(
-      "FRENAR",
-      "REGLA_SEGURIDAD_MONTO_INVALIDO",
-      `El monto de la factura "${invoice.id}" no es válido (${invoice.monto}). Se frena el pago.`,
-    );
-  }
   if (promptInjection) {
     return build(
       "FRENAR",
@@ -153,31 +243,60 @@ export function evaluateInvoice(
       `Se detectó un intento de manipulación (prompt injection) en la factura "${invoice.id}". Se frena el pago por seguridad.`,
     );
   }
+  if (montoInvalido) {
+    return build(
+      "FRENAR",
+      "REGLA_SEGURIDAD_MONTO_INVALIDO",
+      `El monto de la factura "${invoice.id}" no es válido (${invoice.monto}). Se frena el pago.`,
+    );
+  }
 
-  // Regla 1: cobro duplicado (ID, hash de archivo o huella compuesta).
-  const idNormalizado = normalizeInvoiceId(invoice.id);
-  const fingerprint = compositeFingerprint(invoice.emisor, montoUsd, invoice.fecha_vencimiento);
+  // Regla 1: duplicado por hash exacto de archivo. Es evidencia fiable e
+  // independiente de la calidad de extracción, por lo que puede bloquear antes.
   const fileHash = (invoice.fileHash ?? "").trim().toLowerCase();
-
-  const duplicadoPorId = processedIds.some(
-    (id) => normalizeInvoiceId(id) === idNormalizado,
-  );
   const duplicadoPorHash =
     fileHash.length > 0 &&
     processedFileHashes.some((h) => h.trim().toLowerCase() === fileHash);
+  traza.push(`REGLA_1_DUPLICADA_HASH: hash=${duplicadoPorHash ? "SÍ" : "no"}`);
+  if (duplicadoPorHash) {
+    return build(
+      "FRENAR",
+      "REGLA_0_DUPLICADA",
+      `La factura "${invoice.id}" ya fue procesada (mismo hash de archivo). Se frena para evitar un cobro duplicado.`,
+    );
+  }
+
+  // Regla 2: calidad documental. Se evalúa ANTES de usar importes, monedas o
+  // identidades inciertas en las reglas financieras (proveedor, presupuesto, contrato).
+  const quality = evaluateDocumentQuality(invoice);
+  traza.push(
+    `REGLA_2_CALIDAD: ${quality.ok ? "confianza verificable y campos críticos fiables" : quality.razon ?? "calidad insuficiente"}`,
+  );
+  if (!quality.ok) {
+    return build(
+      "ESCALAR",
+      quality.regla ?? "REGLA_CONFIANZA_BAJA",
+      quality.razon ?? "La calidad documental es insuficiente para autorizar el pago automáticamente.",
+    );
+  }
+
+  // Regla 3: duplicado por ID o huella compuesta. Solo es concluyente cuando los
+  // datos relevantes ya son fiables (la calidad acaba de ser validada).
+  const idNormalizado = normalizeInvoiceId(invoice.id);
+  const fingerprint = compositeFingerprint(invoice.emisor, montoUsd, invoice.fecha_vencimiento);
+  const duplicadoPorId = processedIds.some(
+    (id) => normalizeInvoiceId(id) === idNormalizado,
+  );
   const duplicadoPorHuella = processedFingerprints.some(
     (fp) => normalizeText(fp) === normalizeText(fingerprint),
   );
-
   traza.push(
-    `REGLA_1_DUPLICADA: id=${duplicadoPorId ? "SÍ" : "no"}, hash=${duplicadoPorHash ? "SÍ" : "no"}, huella=${duplicadoPorHuella ? "SÍ" : "no"}`,
+    `REGLA_3_DUPLICADA: id=${duplicadoPorId ? "SÍ" : "no"}, huella=${duplicadoPorHuella ? "SÍ" : "no"}`,
   );
-  if (duplicadoPorId || duplicadoPorHash || duplicadoPorHuella) {
+  if (duplicadoPorId || duplicadoPorHuella) {
     const motivo = duplicadoPorId
       ? "mismo ID"
-      : duplicadoPorHash
-        ? "mismo hash de archivo"
-        : "misma huella financiera (emisor + monto + fecha)";
+      : "misma huella financiera (emisor + monto + fecha)";
     return build(
       "FRENAR",
       "REGLA_0_DUPLICADA",
@@ -185,7 +304,9 @@ export function evaluateInvoice(
     );
   }
 
-  // Regla 2: proveedor autorizado + anti-spoofing.
+  // Regla 4: proveedor autorizado + anti-spoofing. La identidad ya es fiable
+  // (emisor_reliable pasó la regla de calidad); un proveedor desconocido por
+  // falta de evidencia ya fue escalado, no llega aquí como "no autorizado".
   const emisorNormalizado = normalizeText(invoice.emisor);
   const proveedores = (rules.proveedores_permitidos ?? []).map(normalizeText);
   const proveedorPermitido = proveedores.includes(emisorNormalizado);
@@ -194,7 +315,7 @@ export function evaluateInvoice(
     const spoofing = detectVendorSpoofing(invoice.emisor, rules.proveedores_permitidos ?? []);
     if (spoofing.spoofed && spoofing.closest) {
       traza.push(
-        `REGLA_2_SPOOFING: "${invoice.emisor}" se parece a "${spoofing.closest}" (distancia ${spoofing.distance})`,
+        `REGLA_4_SPOOFING: "${invoice.emisor}" se parece a "${spoofing.closest}" (distancia ${spoofing.distance})`,
       );
       return build(
         "FRENAR",
@@ -202,19 +323,19 @@ export function evaluateInvoice(
         `Alerta de suplantación de proveedor: "${invoice.emisor}" intenta imitar a "${spoofing.closest}" (distancia de Levenshtein ${spoofing.distance}). Se frena el pago.`,
       );
     }
-    traza.push(`REGLA_2_PROVEEDOR: "${invoice.emisor}" NO autorizado`);
+    traza.push(`REGLA_4_PROVEEDOR: "${invoice.emisor}" NO autorizado`);
     return build(
       "FRENAR",
       "REGLA_1_PROVEEDOR",
       `El proveedor "${invoice.emisor}" no está en la lista blanca de proveedores permitidos. Se frena el pago.`,
     );
   }
-  traza.push(`REGLA_2_PROVEEDOR: "${invoice.emisor}" autorizado`);
+  traza.push(`REGLA_4_PROVEEDOR: "${invoice.emisor}" autorizado`);
 
-  // Regla 3: presupuesto disponible.
+  // Regla 5: presupuesto disponible.
   const presupuestoSuficiente = montoUsd <= rules.presupuesto_mensual_restante;
   traza.push(
-    `REGLA_3_PRESUPUESTO: $${montoUsd} vs presupuesto $${rules.presupuesto_mensual_restante}`,
+    `REGLA_5_PRESUPUESTO: $${montoUsd} vs presupuesto $${rules.presupuesto_mensual_restante}`,
   );
   if (!presupuestoSuficiente) {
     return build(
@@ -224,7 +345,7 @@ export function evaluateInvoice(
     );
   }
 
-  // Regla 4: discrepancia con acuerdo comercial en ERP.
+  // Regla 6: discrepancia con acuerdo comercial en ERP.
   const acuerdoExplicito = invoice.monto_acordado;
   const acuerdoPorProveedor = rules.acuerdos_por_proveedor?.[invoice.emisor];
   const montoAcordado =
@@ -236,7 +357,7 @@ export function evaluateInvoice(
 
   if (montoAcordado != null) {
     const cumpleAcuerdo = montoUsd <= montoAcordado;
-    traza.push(`REGLA_4_ACUERDO: $${montoUsd} vs acordado $${montoAcordado}`);
+    traza.push(`REGLA_6_ACUERDO: $${montoUsd} vs acordado $${montoAcordado}`);
     if (!cumpleAcuerdo) {
       return build(
         "ESCALAR",
@@ -245,13 +366,13 @@ export function evaluateInvoice(
       );
     }
   } else {
-    traza.push("REGLA_4_ACUERDO: sin acuerdo previo registrado");
+    traza.push("REGLA_6_ACUERDO: sin acuerdo previo registrado");
   }
 
-  // Regla 5: límite de aprobación automática.
+  // Regla 7: límite de aprobación automática.
   const dentroDelLimite = montoUsd <= rules.limite_monto_automatico;
   traza.push(
-    `REGLA_5_LIMITE_AUTO: $${montoUsd} vs límite $${rules.limite_monto_automatico}`,
+    `REGLA_7_LIMITE_AUTO: $${montoUsd} vs límite $${rules.limite_monto_automatico}`,
   );
   if (!dentroDelLimite) {
     return build(
@@ -261,9 +382,9 @@ export function evaluateInvoice(
     );
   }
 
-  // Regla 6: cumplimiento total.
+  // Regla 8: cumplimiento total.
   const saldoRestante = rules.presupuesto_mensual_restante - montoUsd;
-  traza.push(`REGLA_6_CUMPLIMIENTO: pago aprobado, saldo restante $${saldoRestante}`);
+  traza.push(`REGLA_8_CUMPLIMIENTO: pago aprobado, saldo restante $${saldoRestante}`);
   return build(
     "PAGAR",
     "APROBACION_AUTOMATICA",

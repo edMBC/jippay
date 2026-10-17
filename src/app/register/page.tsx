@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Mail, Wallet } from "lucide-react";
+import { Building2, Loader2, Mail, Wallet } from "lucide-react";
 import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { useStore } from "@/lib/store";
 import { ROLE_OPTIONS, type UserRole } from "@/lib/auth/roles";
@@ -13,11 +13,15 @@ export default function RegisterPage() {
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [budget, setBudget] = useState(5000);
-  const [role, setRole] = useState<UserRole>("CFO_ADMIN");
+  // El registro público no puede auto-asignarse roles privilegiados (CFO/CONTROLLER);
+  // solo el rol de solo lectura está disponible por autoservicio.
+  const [role, setRole] = useState<UserRole>("AUDITOR_VIEWER");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     setError(null);
+    setSubmitting(true);
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -41,6 +45,8 @@ export default function RegisterPage() {
       router.push("/terminal");
     } catch {
       setError("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -98,14 +104,26 @@ export default function RegisterPage() {
         <select
           value={role}
           onChange={(e) => setRole(e.target.value as UserRole)}
-          className="mb-4 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+          className="mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
         >
           {ROLE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} className="bg-zinc-900">
+            <option
+              key={o.value}
+              value={o.value}
+              disabled={o.value === "CFO_ADMIN" || o.value === "CONTROLLER_APPROVER"}
+              className="bg-zinc-900"
+            >
               {o.label}
+              {o.value === "CFO_ADMIN" || o.value === "CONTROLLER_APPROVER"
+                ? " — requiere invitación"
+                : ""}
             </option>
           ))}
         </select>
+        <p className="mb-4 text-[11px] leading-relaxed text-zinc-600">
+          Los roles con privilegios financieros (CFO y Controller) se asignan mediante
+          un proceso de invitación autorizado; no pueden autoconcederse en el registro.
+        </p>
 
         {error && (
           <div className="mb-4 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-300">
@@ -116,9 +134,11 @@ export default function RegisterPage() {
         <button
           type="button"
           onClick={() => void submit()}
-          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+          disabled={submitting}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:opacity-50"
         >
-          Crear cuenta y continuar
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {submitting ? "Creando cuenta…" : "Crear cuenta y continuar"}
         </button>
       </IOSGlassCard>
     </div>

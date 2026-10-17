@@ -1,14 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { evaluateInvoice } from "../engine";
-import { deterministicExtract, extractInvoiceFromText } from "../extractor";
+import {
+  deterministicExtract,
+  extractInvoiceFromText,
+  finalizeDeterministicExtraction,
+} from "../extractor";
 import { defaultCompanyRules, sampleRawInvoices } from "../mock-data";
 import {
   AgentDecisionSchema,
   CompanyRulesSchema,
   InvoiceSchema,
   type CompanyRules,
+  type CriticalFields,
   type Invoice,
 } from "../schemas";
+
+const CONFIDENT_FIELDS: CriticalFields = {
+  emisor_reliable: true,
+  monto_reliable: true,
+  moneda_reliable: true,
+  id_reliable: true,
+  fecha_reliable: true,
+};
 
 const baseInvoice: Invoice = {
   id: "INV-204",
@@ -17,6 +30,8 @@ const baseInvoice: Invoice = {
   moneda: "USD",
   fecha_vencimiento: "2026-11-15",
   concepto: "Desarrollo de módulo de pagos",
+  confidence_score: 100,
+  critical_fields: CONFIDENT_FIELDS,
 };
 
 const rules: CompanyRules = {
@@ -113,6 +128,8 @@ describe("Camino 2: multimoneda convertida a USD", () => {
       moneda: "COP",
       fecha_vencimiento: "2026-11-05",
       concepto: "Consultoría",
+      confidence_score: 100,
+      critical_fields: CONFIDENT_FIELDS,
     };
     const decision = evaluateInvoice(invoice, rules, []);
     expect(decision.estado).toBe("PAGAR");
@@ -127,6 +144,8 @@ describe("Camino 2: multimoneda convertida a USD", () => {
       moneda: "MXN",
       fecha_vencimiento: "2026-11-25",
       concepto: "Taller",
+      confidence_score: 100,
+      critical_fields: CONFIDENT_FIELDS,
     };
     const decision = evaluateInvoice(invoice, rules, []);
     expect(decision.estado).toBe("PAGAR");
@@ -140,6 +159,8 @@ describe("Camino 2: multimoneda convertida a USD", () => {
       moneda: "EUR",
       fecha_vencimiento: "2026-11-10",
       concepto: "Hosting",
+      confidence_score: 100,
+      critical_fields: CONFIDENT_FIELDS,
     };
     const decision = evaluateInvoice(invoice, rules, []);
     // 920 EUR / 0.92 = 1000 USD -> igual al límite, aprueba (<=)
@@ -389,6 +410,8 @@ describe("Camino 11: invariante de lote completo (stress test)", () => {
         moneda: "USD",
         fecha_vencimiento: `2026-12-${String((i % 28) + 1).padStart(2, "0")}`,
         concepto: `Lote ${i}`,
+        confidence_score: 100,
+        critical_fields: CONFIDENT_FIELDS,
       });
     }
 
@@ -409,14 +432,21 @@ describe("Camino 11: invariante de lote completo (stress test)", () => {
 
   it("el lote completo de ejemplos es determinista", () => {
     const run = () =>
-      sampleRawInvoices.map((s) => evaluateInvoice(deterministicExtract(s.rawText), rules, []).estado);
+      sampleRawInvoices.map(
+        (s) =>
+          evaluateInvoice(
+            finalizeDeterministicExtraction(deterministicExtract(s.rawText)),
+            rules,
+            [],
+          ).estado,
+      );
     expect(run()).toEqual(run());
   });
 
   it("ningún ejemplo del lote aprueba fuera de reglas", () => {
     const whitelist = rules.proveedores_permitidos.map((p) => p.trim().toLowerCase());
     for (const sample of sampleRawInvoices) {
-      const invoice = deterministicExtract(sample.rawText);
+      const invoice = finalizeDeterministicExtraction(deterministicExtract(sample.rawText));
       const decision = evaluateInvoice(invoice, rules, []);
       if (decision.estado === "PAGAR") {
         expect(whitelist).toContain(invoice.emisor.trim().toLowerCase());

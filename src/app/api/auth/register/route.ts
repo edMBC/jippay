@@ -31,6 +31,16 @@ export async function POST(request: Request) {
 
   const { company, email, budget, role } = parsed.data;
 
+  // El registro público NO puede auto-asignarse roles privilegiados. El
+  // provisionamiento de CFO_ADMIN/CONTROLLER_APPROVER es una operación
+  // administrativa del servidor (no disponible desde este endpoint).
+  if (role === "CFO_ADMIN" || role === "CONTROLLER_APPROVER") {
+    return Response.json(
+      { error: "No puede auto-asignarse un rol privilegiado" },
+      { status: 403 },
+    );
+  }
+
   if (!canIssueSessions()) {
     return Response.json(
       { error: "El servicio de sesiones no está disponible" },

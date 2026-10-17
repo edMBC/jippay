@@ -82,9 +82,9 @@ function extractPdfText(buffer: Uint8Array): string {
   return runs ? runs.join("\n") : "";
 }
 
-// Simulación OCR determinista para imágenes: primero analiza el contenido binario
-// (chunks de texto PNG / XML de SVG) y solo si no hay metadatos útiles recurre al
-// nombre del archivo (que en la demo codifica la factura).
+// Extracción de texto de imágenes: SOLO se usa contenido embebido (chunks de texto
+// PNG / XML de SVG). El nombre del archivo NO es evidencia documental válida, por lo
+// que nunca se fabrica una factura a partir de él.
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 
 function extractPngTextChunks(buffer: Uint8Array): string {
@@ -136,26 +136,8 @@ function extractSvgText(buffer: Uint8Array): string {
     .trim();
 }
 
-function extractTextFromFileName(fileName: string): string {
-  const base = fileName.replace(/\.[^.]+$/, "");
-  const parts = base.split("_");
-  if (parts.length >= 4) {
-    const [id, emisor, monto, moneda] = parts;
-    return [
-      `Recibo (imagen) ${fileName}`,
-      `Factura: ${id.replace(/-/g, "-")}`,
-      `Emisor: ${emisor}`,
-      `Monto: ${monto} ${moneda}`,
-      "Concepto: Recibo escaneado",
-    ].join("\n");
-  }
-  return `Recibo (imagen) ${fileName}\nEmisor: DevCorp\nMonto: 450 USD`;
-}
-
-function extractImageText(buffer: Uint8Array, fileName: string): string {
-  const embedded = extractPngTextChunks(buffer) || extractSvgText(buffer);
-  if (embedded.trim()) return embedded;
-  return extractTextFromFileName(fileName);
+function extractImageText(buffer: Uint8Array): string {
+  return extractPngTextChunks(buffer) || extractSvgText(buffer);
 }
 
 export function extractTextFromBuffer(
@@ -172,7 +154,7 @@ export function extractTextFromBuffer(
     return extractPdfText(buffer);
   }
   if (IMAGE_TYPES.has(ext) || mimeType.startsWith("image/")) {
-    return extractImageText(buffer, fileName);
+    return extractImageText(buffer);
   }
   return decodeText(buffer);
 }
@@ -190,6 +172,37 @@ function normalizeToInvoice(rawText: string, fileName: string, fileHash: string)
   });
 }
 
+/**
+ * Documento sin evidencia textual fiable: no se fabrica una factura ficticia.
+ * El importe es DESCONOCIDO (no cero) y se marca explícitamente como documento
+ * no procesable para que el motor derive a revisión humana (`REGLA_DOCUMENTO_NO_PROCESABLE`),
+ * nunca a una autorización automática ni a un bloqueo por "importe inválido".
+ */
+function unprocessableInvoice(fileHash: string, fileName: string): Invoice {
+  return {
+    id: `UNPROCESSABLE-${fileHash.slice(0, 8).toUpperCase()}`,
+    emisor: "ProveedorDesconocido",
+    monto: 0,
+    moneda: "USD",
+    fecha_vencimiento: new Date().toISOString().slice(0, 10),
+    concepto: "Documento no procesable: sin evidencia textual fiable",
+    fecha_vencimiento_inferida: true,
+    moneda_inferida: true,
+    extraction_engine: "deterministic-fallback",
+    confidence_score: 0,
+    critical_fields: {
+      emisor_reliable: false,
+      monto_reliable: false,
+      moneda_reliable: false,
+      id_reliable: false,
+      fecha_reliable: false,
+    },
+    documento_no_procesable: true,
+    fileHash,
+    fileName,
+  };
+}
+
 export async function ingestFile(
   buffer: Uint8Array,
   fileName: string,
@@ -197,9 +210,21 @@ export async function ingestFile(
   const mimeType = detectMimeType(fileName);
   const fileHash = sha256Hex(buffer);
   const rawText = extractTextFromBuffer(buffer, fileName, mimeType);
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+
+  // Imágenes sin texto embebido: no fabricar factura a partir del nombre de archivo.
+  const isImage = IMAGE_TYPES.has(ext) || mimeType.startsWith("image/");
+  if (isImage && !rawText.trim()) {
+    return {
+      invoice: unprocessableInvoice(fileHash, fileName),
+      fileHash,
+      fileName,
+      mimeType,
+      rawText,
+    };
+  }
 
   let invoice: Invoice;
-  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
 
   if (ext === "csv") {
     const batch = parseInvoiceBatchCsv(rawText);

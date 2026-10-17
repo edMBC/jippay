@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, ShieldCheck } from "lucide-react";
+import { Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
 import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { useStore } from "@/lib/store";
 import { ROLE_OPTIONS } from "@/lib/auth/roles";
@@ -20,10 +20,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const submitCredentials = async () => {
     setError(null);
+    setSubmitting(true);
     const user = await login(email, password);
+    setSubmitting(false);
     if (user) {
       router.push("/terminal");
     } else {
@@ -33,7 +36,9 @@ export default function LoginPage() {
 
   const enterRole = async (role: (typeof ROLE_OPTIONS)[number]["value"]) => {
     setError(null);
+    setSubmitting(true);
     const user = await loginDemo(role);
+    setSubmitting(false);
     if (user) router.push("/terminal");
   };
 
@@ -93,9 +98,11 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={() => void submitCredentials()}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+          disabled={submitting}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:opacity-50"
         >
-          Entrar
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {submitting ? "Verificando…" : "Entrar"}
         </button>
 
         <p className="mt-4 text-center text-xs text-zinc-500">
@@ -116,7 +123,8 @@ export default function LoginPage() {
               key={role.value}
               type="button"
               onClick={() => void enterRole(role.value)}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/65 p-4 text-left transition-colors hover:border-zinc-600"
+              disabled={submitting}
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/65 p-4 text-left transition-colors hover:border-zinc-600 disabled:opacity-50"
             >
               <ShieldCheck className="h-5 w-5 text-zinc-400" />
               <span className="mt-2 block text-sm font-medium text-zinc-200">{role.label}</span>

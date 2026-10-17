@@ -8,6 +8,12 @@ export interface SessionUser {
   email: string;
   role: UserRole;
   company?: string;
+  /** Identificador estable de la empresa a la que pertenece el usuario. */
+  company_id?: string;
+  /** ID estable del usuario de Supabase Auth (fuente de identidad real). */
+  auth_user_id?: string;
+  /** Origen de la identidad: Supabase Auth o demo local. */
+  identity_provider?: "supabase" | "demo";
   name?: string;
 }
 

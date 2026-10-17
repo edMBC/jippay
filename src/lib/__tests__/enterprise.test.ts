@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAgentSystemPrompt, finalizeDeterministicExtraction } from "../extractor";
 import { computeThreeWayMatch, evaluateInvoice } from "../engine";
-import { ISO20022_STATUS_MAP, type Invoice } from "../schemas";
+import { ISO20022_STATUS_MAP, type CriticalFields, type Invoice } from "../schemas";
 import {
   canApprove,
   canEditRules,
@@ -18,6 +18,14 @@ const rules = {
   acuerdos_por_proveedor: { DevCorp: 800, LatamDesign: 2000 },
 };
 
+const CONFIDENT_FIELDS: CriticalFields = {
+  emisor_reliable: true,
+  monto_reliable: true,
+  moneda_reliable: true,
+  id_reliable: true,
+  fecha_reliable: true,
+};
+
 const baseInvoice: Invoice = {
   id: "INV-204",
   emisor: "DevCorp",
@@ -25,6 +33,8 @@ const baseInvoice: Invoice = {
   moneda: "USD",
   fecha_vencimiento: "2026-11-15",
   concepto: "Desarrollo de módulo de pagos",
+  confidence_score: 100,
+  critical_fields: CONFIDENT_FIELDS,
 };
 
 describe("ISO 20022 & 3-Way Match", () => {

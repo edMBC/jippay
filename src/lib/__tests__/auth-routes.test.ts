@@ -165,6 +165,15 @@ describe("Autorización server-side de rutas mutables", () => {
     expect(res.status).toBe(403);
     expect(persistDecision).not.toHaveBeenCalled();
   });
+
+  it("documento no procesable (monto 0) es rechazado por Zod y no persiste", async () => {
+    const res = await processInvoice(
+      jsonRequest("/api/process-invoice", CFO, { rawText: "hola mundo", rules: RULES }),
+    );
+    // El esquema rechaza el importe 0 antes de llegar al motor; nunca se autoriza.
+    expect(res.status).toBe(422);
+    expect(persistDecision).not.toHaveBeenCalled();
+  });
 });
 
 describe("Secreto de firma y sesiones", () => {

@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   FileText,
   Image as ImageIcon,
+  Loader2,
   Lock,
   Mail,
   Upload,
@@ -101,19 +102,25 @@ export default function TerminalPage() {
     processText,
     processFile,
     processBatch,
-    resolveEscalated,
+    submitApproval,
+    budget,
+    demoMode,
     exportCsv,
     exportJson,
   } = useStore();
 
   const systemPrompt = buildAgentSystemPrompt(rules);
-  const canApprove = user?.role === "CFO_ADMIN" || user?.role === "CONTROLLER_APPROVER";
+  // Solo el controller firma excepciones (segregación de funciones). El CFO
+  // gobierna reglas/presupuesto y no aprueba excepciones por defecto.
+  const canApprove = user?.role === "CONTROLLER_APPROVER";
 
   const [channel, setChannel] = useState<Channel>("galeria");
   const [manualText, setManualText] = useState("");
   const [filter, setFilter] = useState<Filter>("TODOS");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [approvalError, setApprovalError] = useState<Record<string, string>>({});
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [drawerRecord, setDrawerRecord] = useState<DecisionRecord | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +131,27 @@ export default function TerminalPage() {
 
   const latest = decisions[0]?.decision ?? null;
   const inspected = latest?.factura ?? null;
+
+  const runApproval = async (record: DecisionRecord, action: "APROBADO" | "RECHAZADO") => {
+    const justification = (notes[record.decision.invoice_id] ?? "").trim();
+    if (justification.length < 10) {
+      setApprovalError((prev) => ({
+        ...prev,
+        [record.decision.invoice_id]: "La justificación debe tener al menos 10 caracteres.",
+      }));
+      return;
+    }
+    setSubmittingId(record.decision.invoice_id);
+    setApprovalError((prev) => ({ ...prev, [record.decision.invoice_id]: "" }));
+    const result = await submitApproval(record, action, justification);
+    setSubmittingId(null);
+    if (!result.ok) {
+      setApprovalError((prev) => ({
+        ...prev,
+        [record.decision.invoice_id]: result.error ?? "El servidor denegó la operación.",
+      }));
+    }
+  };
 
   const runFile = async (file: File) => {
     await processFile(file);
@@ -156,6 +184,24 @@ export default function TerminalPage() {
         <p className="mt-2 text-sm text-zinc-400">
           Ingiere PDFs, fotos, correos y CSV; audita cada decisión explicable.
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+              demoMode ? "bg-amber-950 text-amber-300" : "bg-emerald-950 text-emerald-300"
+            }`}
+          >
+            {demoMode ? "Modo demostración (sin banco real)" : "Ledger transaccional verificado"}
+          </span>
+          {budget && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-400">
+              <span>Presupuesto disponible</span>
+              <span className="font-mono text-zinc-200">${budget.availableUsd}</span>
+              <span className="text-zinc-600">
+                (reservado ${budget.reservedUsd} · consumido ${budget.consumedUsd})
+              </span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Selector de canal */}
@@ -170,8 +216,12 @@ export default function TerminalPage() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-xl bg-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:opacity-40"
         >
-          <Zap className="h-4 w-4" />
-          Ejecutar Stress Test (Lote Completo)
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Zap className="h-4 w-4" />
+          )}
+          {loading ? "Procesando…" : "Ejecutar Stress Test (Lote Completo)"}
         </button>
         <button
           onClick={() => downloadBlob(exportCsv(), "text/csv", "jippay-reconciliacion.csv")}
@@ -422,6 +472,24 @@ export default function TerminalPage() {
                       </td>
                       <td className="px-3 py-2">
                         <IOSStatusBadge estado={decision.estado} />
+                        {record.flowStatus === "APPROVED_FOR_PAYMENT" && (
+                          <span className="mt-1 block text-[10px] font-medium text-emerald-400">
+                            Aprobado para pago
+                          </span>
+                        )}
+                        {record.reservationStatus && (
+                          <span
+                            className={`mt-0.5 block text-[10px] ${
+                              record.reservationStatus === "ACTIVE"
+                                ? "text-amber-400"
+                                : record.reservationStatus === "RELEASED"
+                                  ? "text-zinc-500"
+                                  : "text-emerald-400"
+                            }`}
+                          >
+                            Reserva {record.reservationStatus.toLowerCase()}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <ThreeWaySeal decision={decision} />
@@ -445,11 +513,18 @@ export default function TerminalPage() {
                                 ) : (
                                   <XCircle className="h-3 w-3" />
                                 )}
-                                {record.humanAction}
+                                {record.humanAction === "APROBADO"
+                                  ? "Aprobado para pago"
+                                  : "Rechazado"}
                               </span>
                               {decision.approved_by && (
                                 <span className="text-[10px] text-zinc-500">
                                   {decision.approved_by}
+                                </span>
+                              )}
+                              {record.humanAction === "APROBADO" && (
+                                <span className="text-[10px] text-zinc-600">
+                                  (pendiente de pago — no liquidado)
                                 </span>
                               )}
                             </span>
@@ -457,18 +532,16 @@ export default function TerminalPage() {
                             <span className="flex flex-col gap-1">
                               <span className="flex gap-1.5">
                                 <button
-                                  onClick={() =>
-                                    resolveEscalated(record, "APROBADO", notes[decision.invoice_id])
-                                  }
-                                  className="rounded-lg bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-950 transition-colors hover:bg-zinc-200"
+                                  disabled={submittingId === decision.invoice_id}
+                                  onClick={() => runApproval(record, "APROBADO")}
+                                  className="rounded-lg bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   Aprobar
                                 </button>
                                 <button
-                                  onClick={() =>
-                                    resolveEscalated(record, "RECHAZADO", notes[decision.invoice_id])
-                                  }
-                                  className="rounded-lg border border-zinc-700 px-2 py-0.5 text-[11px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
+                                  disabled={submittingId === decision.invoice_id}
+                                  onClick={() => runApproval(record, "RECHAZADO")}
+                                  className="rounded-lg border border-zinc-700 px-2 py-0.5 text-[11px] font-medium text-zinc-400 transition-colors hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   Rechazar
                                 </button>
@@ -481,9 +554,14 @@ export default function TerminalPage() {
                                     [decision.invoice_id]: e.target.value,
                                   }))
                                 }
-                                placeholder="Nota (opcional)"
-                                className="w-36 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                placeholder="Justificación obligatoria (mín. 10 caracteres)"
+                                className="w-44 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                               />
+                              {approvalError[decision.invoice_id] && (
+                                <span className="max-w-44 text-[10px] leading-tight text-amber-400">
+                                  {approvalError[decision.invoice_id]}
+                                </span>
+                              )}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">

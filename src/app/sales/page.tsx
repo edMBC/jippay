@@ -21,7 +21,7 @@ const PLANS = [
     name: "Enterprise Custom",
     price: "Custom",
     cadence: "",
-    features: ["Volúmenes ilimitados", "ISO 20022 & SOC 2", "Supabase / ERP on-prem", "SLA + auditoría dedicada"],
+    features: ["Volúmenes ilimitados", "ISO 20022 + Supabase Auth/RLS", "Supabase / ERP on-prem", "SLA + auditoría dedicada"],
   },
 ];
 
@@ -34,11 +34,11 @@ const MATRIX = [
   {
     icon: ScrollText,
     title: "ISO 20022 & ISO 4217 FX",
-    description: "Veredictos ACCP/PDNG/RJCT y normalización multimoneda congelada al instante de evaluación.",
+    description: "Mapeo de veredictos ACCP/PDNG/RJCT y normalización multimoneda congelada al instante de evaluación.",
   },
   {
     icon: Zap,
-    title: "ISO/IEC 42001 (Gobernanza IA)",
+    title: "Gobernanza de IA por reglas",
     description: "El contexto de reglas se inyecta al agente; el guardián determinista nunca delega la decisión.",
   },
   {

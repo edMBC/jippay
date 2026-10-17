@@ -1,6 +1,11 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
-import { InvoiceSchema, type CompanyRules, type Invoice } from "./schemas";
+import {
+  InvoiceSchema,
+  type CompanyRules,
+  type CriticalFields,
+  type Invoice,
+} from "./schemas";
 import { convertToUsd } from "./security";
 
 /**
@@ -139,9 +144,11 @@ function findEmisor(text: string): string {
   return "ProveedorDesconocido";
 }
 
-function findCurrency(text: string): string {
+function findCurrency(text: string): { currency: string; detected: boolean } {
   const match = text.match(/\b(USD|COP|MXN|ARS|BRL)\b/i);
-  return match ? match[1].toUpperCase() : "USD";
+  if (match) return { currency: match[1].toUpperCase(), detected: true };
+  // Sin evidencia explícita de moneda: se asume USD pero se marca como no detectada.
+  return { currency: "USD", detected: false };
 }
 
 function parseNumeric(raw: string): number | null {
@@ -236,7 +243,8 @@ function findMontoAcordado(text: string): number | undefined {
  */
 export function deterministicExtract(rawText: string): Invoice {
   const text = rawText.replace(/\r/g, "");
-  const currency = findCurrency(text);
+  const currencyResult = findCurrency(text);
+  const currency = currencyResult.currency;
   const rawAmount = findAmount(text);
   const dateResult = findDate(text);
 
@@ -254,6 +262,7 @@ export function deterministicExtract(rawText: string): Invoice {
     moneda,
     fecha_vencimiento: dateResult.date,
     fecha_vencimiento_inferida: dateResult.inferred,
+    moneda_inferida: !currencyResult.detected,
     concepto: findConcepto(text),
     monto_acordado: findMontoAcordado(text),
   };
@@ -265,6 +274,9 @@ const LlmInvoiceSchema = InvoiceSchema.omit({
   confidence_score: true,
   system_prompt_preview: true,
   fecha_vencimiento_inferida: true,
+  moneda_inferida: true,
+  critical_fields: true,
+  documento_no_procesable: true,
 });
 
 /**
@@ -302,13 +314,51 @@ export function buildAgentSystemPrompt(rules?: CompanyRules): string {
   return partes.join("\n");
 }
 
-function estimateDeterministicConfidence(invoice: Invoice, fechaInferida: boolean): number {
-  let score = 40;
-  if (!invoice.id.startsWith("GEN-")) score += 15;
-  if (invoice.emisor !== "ProveedorDesconocido") score += 20;
-  if (invoice.monto > 0) score += 15;
-  if (!fechaInferida) score += 10;
-  return Math.max(0, Math.min(100, score));
+const FIELD_WEIGHTS: ReadonlyArray<[keyof CriticalFields, number]> = [
+  ["emisor_reliable", 25],
+  ["monto_reliable", 25],
+  ["moneda_reliable", 15],
+  ["id_reliable", 20],
+  ["fecha_reliable", 15],
+];
+
+/**
+ * Determina, con validaciones deterministas, si cada campo crítico tiene
+ * evidencia suficiente. No depende de ninguna declaración del modelo.
+ */
+export function computeCriticalFields(invoice: Invoice): CriticalFields {
+  const emisor = typeof invoice.emisor === "string" ? invoice.emisor.trim() : "";
+  const id = typeof invoice.id === "string" ? invoice.id.trim() : "";
+  const fecha = typeof invoice.fecha_vencimiento === "string" ? invoice.fecha_vencimiento : "";
+
+  return {
+    emisor_reliable: emisor !== "" && emisor !== "ProveedorDesconocido",
+    monto_reliable:
+      typeof invoice.monto === "number" && Number.isFinite(invoice.monto) && invoice.monto > 0,
+    moneda_reliable:
+      typeof invoice.moneda === "string" &&
+      /^[A-Z]{3}$/.test(invoice.moneda) &&
+      invoice.moneda_inferida !== true,
+    id_reliable:
+      id !== "" &&
+      !id.toUpperCase().startsWith("GEN-") &&
+      !id.toUpperCase().startsWith("UNPROCESSABLE-"),
+    fecha_reliable:
+      /^\d{4}-\d{2}-\d{2}$/.test(fecha) && invoice.fecha_vencimiento_inferida !== true,
+  };
+}
+
+/**
+ * Confianza global 0-100 derivada exclusivamente de la fiabilidad de los campos
+ * críticos. Es una señal operativa de calidad, no una probabilidad calibrada.
+ */
+export function computeConfidenceScore(invoice: Invoice): number {
+  const fields = computeCriticalFields(invoice);
+  let score = 0;
+  for (const [key, weight] of FIELD_WEIGHTS) {
+    if (fields[key]) score += weight;
+  }
+  return score;
 }
 
 function buildAgentReasoning(
@@ -338,20 +388,29 @@ function finalizeExtraction(
   const conversion = convertToUsd(base.monto, base.moneda);
   const fecha = fechaInferida ? new Date().toISOString().slice(0, 10) : base.fecha_vencimiento;
 
-  return {
+  const finalized: Invoice = {
     ...base,
     fecha_vencimiento: fecha,
     fecha_vencimiento_inferida: fechaInferida,
     monto_usd: conversion.monto_usd,
     tasa_cambio: conversion.tasa_cambio,
     extraction_engine: engine,
+  };
+
+  // La confianza se deriva de validaciones deterministas sobre los campos extraídos,
+  // nunca de un valor fijo ni de la autodeclaración del modelo.
+  const critical_fields = computeCriticalFields(finalized);
+  const confidence_score = computeConfidenceScore(finalized);
+
+  return {
+    ...finalized,
+    critical_fields,
+    confidence_score,
     agent_reasoning: buildAgentReasoning(
-      { ...base, fecha_vencimiento: fecha },
+      { ...finalized, fecha_vencimiento: fecha },
       engine,
       fechaInferida,
     ),
-    confidence_score:
-      engine === "deepseek-llm" ? 92 : estimateDeterministicConfidence(base, fechaInferida),
     system_prompt_preview: rules ? buildAgentSystemPrompt(rules) : undefined,
   };
 }

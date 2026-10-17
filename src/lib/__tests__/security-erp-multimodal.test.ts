@@ -18,7 +18,7 @@ import {
 import { evaluateInvoice } from "../engine";
 import { ingestFile } from "../multimodal-ingestor";
 import { defaultCompanyRules } from "../mock-data";
-import type { CompanyRules } from "../schemas";
+import type { CompanyRules, CriticalFields } from "../schemas";
 import {
   compositeFingerprint,
   convertToUsd,
@@ -38,6 +38,14 @@ const rules: CompanyRules = {
   presupuesto_mensual_restante: 5000,
   proveedores_permitidos: ["DevCorp", "LatamDesign", "CloudHost", "AndesConsulting"],
   acuerdos_por_proveedor: { DevCorp: 800, LatamDesign: 2000 },
+};
+
+const CONFIDENT_FIELDS: CriticalFields = {
+  emisor_reliable: true,
+  monto_reliable: true,
+  moneda_reliable: true,
+  id_reliable: true,
+  fecha_reliable: true,
 };
 
 describe("SHA-256", () => {
@@ -178,6 +186,8 @@ describe("Conector ERP/CSV", () => {
         moneda: "USD",
         fecha_vencimiento: "2026-11-15",
         concepto: "Dev",
+        confidence_score: 100,
+        critical_fields: CONFIDENT_FIELDS,
       },
       rules,
       [],
@@ -196,6 +206,8 @@ describe("Conector ERP/CSV", () => {
         moneda: "USD",
         fecha_vencimiento: "2026-11-15",
         concepto: "Dev",
+        confidence_score: 100,
+        critical_fields: CONFIDENT_FIELDS,
       },
       rules,
       [],
@@ -231,13 +243,15 @@ describe("Ingesta multimodal", () => {
     expect(result.invoice.monto).toBe(300);
   });
 
-  it("ingesta una imagen PNG por nombre de archivo (OCR simulado)", async () => {
+  it("no fabrica una factura a partir del nombre de archivo de una imagen sin texto", async () => {
     const buffer = new TextEncoder().encode("fake-png-bytes");
     const result = await ingestFile(buffer, "INV-301_LatamDesign_1850_USD.png");
-    expect(result.invoice.id).toBe("INV-301");
-    expect(result.invoice.emisor).toBe("LatamDesign");
-    expect(result.invoice.monto).toBe(1850);
-    expect(result.invoice.monto_usd).toBe(1850);
+    // Sin evidencia textual no se inventan emisor/monto; se marca como no procesable.
+    expect(result.invoice.id).toMatch(/^UNPROCESSABLE-/);
+    expect(result.invoice.emisor).toBe("ProveedorDesconocido");
+    expect(result.invoice.monto).toBe(0);
+    expect(result.invoice.confidence_score).toBe(0);
+    expect(result.invoice.critical_fields?.monto_reliable).toBe(false);
   });
 
   it("ingesta un CSV de lote", async () => {

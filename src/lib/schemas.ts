@@ -1,6 +1,21 @@
 import { z } from "zod";
 
 /**
+ * Confianza por campo crítico. Complementa a `confidence_score` y representa
+ * la evidencia determinista (presencia, tipo, formato, procedencia) de cada
+ * dato indispensable para decidir sin ambigüedad.
+ */
+export const CriticalFieldsSchema = z.object({
+  emisor_reliable: z.boolean().describe("La identidad del proveedor tiene evidencia fiable"),
+  monto_reliable: z.boolean().describe("El importe tiene evidencia fiable y valor positivo"),
+  moneda_reliable: z.boolean().describe("La moneda original fue identificada (no asumida)"),
+  id_reliable: z.boolean().describe("El número comercial/ID es fiable para deduplicar"),
+  fecha_reliable: z.boolean().describe("La fecha de vencimiento fue extraída (no inferida)"),
+});
+
+export type CriticalFields = z.infer<typeof CriticalFieldsSchema>;
+
+/**
  * Contrato de entrada: una factura extraída de un texto crudo
  * (correo, PDF en texto, mensaje de Slack/WhatsApp) o de un archivo.
  */
@@ -40,6 +55,17 @@ export const InvoiceSchema = z.object({
     .boolean()
     .optional()
     .describe("Verdadero si la fecha de vencimiento no aparecía en el documento y se infirió"),
+  moneda_inferida: z
+    .boolean()
+    .optional()
+    .describe("Verdadero si la moneda no se detectó en el documento y se asumió USD"),
+  critical_fields: CriticalFieldsSchema.optional().describe(
+    "Evidencia por campo crítico calculada de forma determinista",
+  ),
+  documento_no_procesable: z
+    .boolean()
+    .optional()
+    .describe("Verdadero si no se pudo extraer información financiera suficiente del documento"),
   security_alert: z.boolean().optional(),
   monto_usd: z.number().nonnegative().optional(),
   tasa_cambio: z.number().optional(),
