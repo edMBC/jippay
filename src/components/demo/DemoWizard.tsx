@@ -33,7 +33,7 @@ import type { AgentDecision, Invoice } from "@/lib/schemas";
 import { useStore } from "@/lib/store";
 import { useSourceConfigs } from "@/lib/source-configs";
 import { SourceConfigModal, type ConfigSourceId } from "@/components/demo/SourceConfigModal";
-import { AuditKanban, type AuditKanbanItem } from "@/components/demo/AuditKanban";
+import { AuditList, type AuditListItem } from "@/components/demo/AuditList";
 import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
 
@@ -444,10 +444,9 @@ export function DemoWizard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Tablero Kanban del cierre SOX: alimentado por los resultados reales del
-  // wizard (no por un lote estático). Cuando aún no hay resultados, el tablero
-  // se muestra vacío en sus 3 columnas.
-  const kanbanItems: AuditKanbanItem[] = useMemo(
+  // Lista de auditoría SOX: alimentada por los resultados reales del wizard.
+  // Cuando aún no hay resultados, la lista se muestra vacía.
+  const auditItems: AuditListItem[] = useMemo(
     () =>
       results.map((r) => ({
         key: r.id,
@@ -1157,9 +1156,9 @@ export function DemoWizard() {
               </div>
             </div>
 
-            {/* Cierre de Auditoría SOX — Tablero Kanban */}
+            {/* Cierre de Auditoría SOX — Lista profesional */}
             <div className="mt-6">
-              <AuditKanban items={kanbanItems} />
+              <AuditList items={auditItems} />
             </div>
 
             {/* Exportación y sincronización ERP */}

@@ -59,7 +59,7 @@ export function IngestionTunnel() {
   const fileHash = useMemo(() => sha256Hex(RAW_TEXT[path]).slice(0, 16), [path]);
 
   return (
-    <div className="rounded-3xl border border-white/[0.08] bg-zinc-900/65 p-6 backdrop-blur-xl">
+    <div className="overflow-x-hidden rounded-3xl border border-white/[0.08] bg-zinc-900/65 p-4 backdrop-blur-xl sm:p-6">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm font-medium text-zinc-100">Túneles de ingesta en vivo</h3>

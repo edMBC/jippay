@@ -33,6 +33,15 @@ const SOURCES = [
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
 ] as const;
 
+/** Raw data entrante por canal: lo que Jippay lee sin intervención humana. */
+const RAW_PAYLOADS: Record<(typeof SOURCES)[number]["id"], string> = {
+  odoo: '{ "invoice_id": "INV-204", "vendor": "DevCorp", "amount": 450.00, "po_ref": "PO-889" }',
+  quickbooks: '{ "txn_id": "INV-204", "payee": "DevCorp", "total": 450.00, "account": "AP" }',
+  a2: '{ "documento": "INV-204", "proveedor": "DevCorp", "monto": 450.00, "asiento": "A-1042" }',
+  correo: "Subject: OC-2026-889 · Attachments: 1 PDF (INV-204.pdf)",
+  whatsapp: '{ "from": "+58412...", "attachment": "invoice.pdf", "type": "image/pdf" }',
+};
+
 type Stage = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 const STAGE_MS: Record<Exclude<Stage, 0>, number> = {
@@ -139,8 +148,11 @@ export function KeynoteDemo() {
     );
   }
 
+  const activeSource =
+    stage >= 2 ? SOURCES[(stage - 2) % SOURCES.length] : null;
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-5xl overflow-x-hidden px-4 py-8 sm:px-8 sm:py-10">
       {/* Estado idle: botón de arranque cinematográfico */}
       {stage === 0 && (
         <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
@@ -170,7 +182,7 @@ export function KeynoteDemo() {
         <div className="space-y-6">
           {/* Telemetría superior: pulso multicanal */}
           <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
                 Live ingestion stream
               </span>
@@ -198,6 +210,24 @@ export function KeynoteDemo() {
                 );
               })}
             </div>
+
+            {/* Raw data entrante del canal activo (el "Aha Moment") */}
+            {activeSource && (
+              <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const Icon = activeSource.icon;
+                    return <Icon className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
+                  })()}
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                    {activeSource.label} · raw data entrante
+                  </span>
+                </div>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-emerald-400/80">
+                  {RAW_PAYLOADS[activeSource.id]}
+                </pre>
+              </div>
+            )}
           </div>
 
           {/* Duelo de los dos caminos */}
@@ -284,9 +314,9 @@ export function KeynoteDemo() {
           </div>
 
           {/* Pie: motor determinista + controles + What-If */}
-          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
                 <BrainCircuit className="h-4 w-4 text-zinc-400" />
                 <span className="text-xs text-zinc-400">La IA extrae</span>
                 <span className="text-zinc-700">→</span>
@@ -296,7 +326,7 @@ export function KeynoteDemo() {
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reiniciar

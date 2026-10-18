@@ -5,7 +5,7 @@ import { IngestionTunnel } from "@/components/demo/IngestionTunnel";
 
 export default function DemoPage() {
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen overflow-x-hidden bg-zinc-950">
       <div className="mx-auto w-full max-w-5xl px-4 pb-10 sm:px-6">
         <IngestionTunnel />
       </div>
