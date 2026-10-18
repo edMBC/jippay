@@ -4,12 +4,13 @@ import {
   BrainCircuit,
   Database,
   Gavel,
-  RefreshCw,
   ShieldCheck,
   UserCheck,
   Wallet,
 } from "lucide-react";
 import { ProcessExplainer } from "@/components/ProcessExplainer";
+import { MultiChannelStream } from "@/components/MultiChannelStream";
+import { MultiParamPanel } from "@/components/MultiParamPanel";
 
 const CORE_VALIDATIONS = [
   {
@@ -104,10 +105,12 @@ export default function Home() {
           archivos y correos corporativos. El demo simula esa operación continua
           y te deja supervisar cada excepción con un movimiento manual firmado.
         </p>
-        <div className="mt-5 inline-flex items-center gap-2 text-xs text-zinc-600">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Sincronización continua con el ERP
-        </div>
+      </section>
+
+      {/* Ecosistema multicanal + multiparametrización */}
+      <section className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-2">
+        <MultiChannelStream />
+        <MultiParamPanel />
       </section>
 
       {/* IA + control determinista */}
