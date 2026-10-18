@@ -16,7 +16,7 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loginDemo } = useStore();
+  const { login } = useStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,16 +30,22 @@ export default function LoginPage() {
     if (user) {
       router.push("/admin");
     } else {
-      setError("Credenciales incorrectas. Usa jippay2026 como contraseña demo.");
+      setError("No se pudo iniciar sesión. Verifica tus credenciales.");
     }
   };
 
-  const enterRole = async (role: (typeof ROLE_OPTIONS)[number]["value"]) => {
+  // Acceso rápido 1-Click: rellena las credenciales oficiales de demo y ejecuta
+  // el mismo `signInWithPassword` real contra Supabase Auth (sin bypass).
+  const enterRole = async (role: (typeof ROLE_OPTIONS)[number]) => {
     setError(null);
     setSubmitting(true);
-    const user = await loginDemo(role);
+    const user = await login(role.email, "jippay2026");
     setSubmitting(false);
-    if (user) router.push("/admin");
+    if (user) {
+      router.push("/admin");
+    } else {
+      setError("No se pudo iniciar sesión. Verifica la configuración de Supabase.");
+    }
   };
 
   return (
@@ -122,7 +128,7 @@ export default function LoginPage() {
             <button
               key={role.value}
               type="button"
-              onClick={() => void enterRole(role.value)}
+              onClick={() => void enterRole(role)}
               disabled={submitting}
               className="rounded-2xl border border-zinc-800 bg-zinc-900/65 p-4 text-left transition-colors hover:border-zinc-600 disabled:opacity-50"
             >

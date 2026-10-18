@@ -20,6 +20,7 @@ import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { IOSSegmentedControl, type SegmentedOption } from "@/components/ui/IOSSegmentedControl";
 import { IOSSlideDrawer } from "@/components/ui/IOSSlideDrawer";
 import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
+import { DashboardShell } from "@/components/ui/DashboardShell";
 import { sampleRawInvoices, type SampleCategory } from "@/lib/mock-data";
 import { buildAgentSystemPrompt } from "@/lib/extractor";
 import { useStore, type DecisionRecord } from "@/lib/store";
@@ -175,7 +176,8 @@ export default function TerminalPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6">
+    <DashboardShell activePath="/terminal">
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6">
       <div className="mb-6">
         <span className="font-mono text-xs uppercase tracking-widest text-zinc-500">
           Vista 03 · Terminal de Auditoría
@@ -635,6 +637,7 @@ export default function TerminalPage() {
           systemPrompt={systemPrompt}
         />
       )}
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

@@ -10,12 +10,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * - Evita el bucle de redirección: un usuario autenticado que visita /login
  *   es redirigido a /admin.
  *
- * Cuando Supabase NO está configurado (desarrollo/demo), el proxy no interviene:
- * la autorización se resuelve en las Route Handlers (Node runtime).
+ * La autenticación es exclusivamente Supabase Auth: no hay cortocircuito ni
+ * sesión demo. Si Supabase no está configurado, el proxy no interviene.
  */
 
 const PROTECTED_PREFIXES = ["/admin", "/terminal"];
-const DEMO_SESSION_COOKIE = "jippay_session";
 
 function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -23,36 +22,12 @@ function isSupabaseConfigured(): boolean {
   );
 }
 
-/** Presencia de la cookie demo firmada (señal blanda; la validación real ocurre en el servidor). */
-function hasDemoSession(request: NextRequest): boolean {
-  return Boolean(request.cookies.get(DEMO_SESSION_COOKIE)?.value);
-}
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isProduction = process.env.NODE_ENV === "production";
 
   const isProtected = PROTECTED_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
-
-  // ---- CORTO-CIRCUITO: sesión demo (cookie firmada por SESSION_SECRET) ----
-  // Se evalúa ANTES de tocar Supabase Auth. En no-producción, la presencia de la
-  // cookie demo es suficiente para dejar pasar hacia /admin y /terminal, sin
-  // consultar `supabase.auth.getUser()` (que de lo contrario invalida el token
-  // local y provoca el bucle de redirección). La validación criptográfica real
-  // de la cookie ocurre en las Route Handlers (Node runtime).
-  if (!isProduction && hasDemoSession(request)) {
-    // Autenticado demo: redirigir fuera de /login y /register.
-    if (pathname === "/login" || pathname === "/register") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin";
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
-    // Dejar pasar a /admin, /terminal y el resto sin consultar Supabase.
-    return NextResponse.next();
-  }
 
   // Sin Supabase configurado: no hay sesión real que refrescar/proteger en Edge.
   if (!isSupabaseConfigured()) {

@@ -15,8 +15,7 @@ import {
 } from "./erp/erp-connector";
 import { defaultCompanyRules, sampleRawInvoices } from "./mock-data";
 import type { AgentDecision, CompanyRules } from "./schemas";
-import type { SessionUser, UserRole } from "./auth/roles";
-import { DEMO_USERS } from "./auth/session";
+import type { SessionUser } from "./auth/roles";
 import { createSupabaseBrowserClient } from "./supabase/client";
 
 export type HumanAction = "APROBADO" | "RECHAZADO" | null;
@@ -130,7 +129,6 @@ interface StoreValue {
   user: SessionUser | null;
   refreshSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<SessionUser | null>;
-  loginDemo: (role: UserRole) => Promise<SessionUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -457,55 +455,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const isDemoAccount = Boolean(DEMO_USERS[normalizedEmail]);
-    const isMasterDemoPassword = password === "jippay2026";
+    // Login puro: solo Supabase Auth. No hay fallback demo ni cookies locales.
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return null;
 
-    // Enrutamiento híbrido: las cuentas demo oficiales (o la contraseña maestra
-    // de demo) van directamente al fallback local, sin chocar con Supabase Auth.
-    if (!isDemoAccount && !isMasterDemoPassword) {
-      const supabase = createSupabaseBrowserClient();
-      if (supabase) {
-        try {
-          const { error } = await supabase.auth.signInWithPassword({ email, password });
-          if (!error) {
-            const meRes = await fetch("/api/auth/me");
-            if (meRes.ok) {
-              const data = (await meRes.json()) as { user: SessionUser | null };
-              if (data.user) {
-                setUser(data.user);
-                return data.user;
-              }
-            }
-          }
-        } catch {
-          // Error de red o del proveedor: se cae al fallback demo de abajo.
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return null;
+
+    // Resuelve el rol y la membresía desde el backend (auto-provisiona si falta).
+    try {
+      const meRes = await fetch("/api/auth/me");
+      if (meRes.ok) {
+        const data = (await meRes.json()) as { user: SessionUser | null };
+        if (data.user) {
+          setUser(data.user);
+          return data.user;
         }
       }
+    } catch {
+      // Sin conexión al backend: no hay identidad corporativa que exponer.
     }
 
-    // Fallback demo local: emite la cookie de sesión firmada (SESSION_SECRET).
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { user: SessionUser };
-    setUser(data.user);
-    return data.user;
-  }, []);
-
-  const loginDemo = useCallback(async (role: UserRole) => {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { user: SessionUser };
-    setUser(data.user);
-    return data.user;
+    return null;
   }, []);
 
   const logout = useCallback(async () => {
@@ -609,7 +580,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       user,
       refreshSession,
       login,
-      loginDemo,
       logout,
     }),
     [
@@ -639,7 +609,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       user,
       refreshSession,
       login,
-      loginDemo,
       logout,
     ],
   );

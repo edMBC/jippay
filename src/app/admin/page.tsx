@@ -22,6 +22,7 @@ import {
   IOSSegmentedControl,
   type SegmentedOption,
 } from "@/components/ui/IOSSegmentedControl";
+import { DashboardShell } from "@/components/ui/DashboardShell";
 import { getJurisdictionRules, listJurisdictions } from "@/lib/jurisdictions";
 import { useStore, type SnapshotData } from "@/lib/store";
 
@@ -236,7 +237,8 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+    <DashboardShell activePath="/admin">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
       <div className="mb-8">
         <span className="font-mono text-xs uppercase tracking-widest text-zinc-500">
           Vista 02 · Centro de Control
@@ -822,6 +824,7 @@ export default function AdminPage() {
           Resetear Demo
         </button>
       </div>
-    </div>
+      </div>
+    </DashboardShell>
   );
 }
