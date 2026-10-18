@@ -32,6 +32,28 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProduction = process.env.NODE_ENV === "production";
 
+  const isProtected = PROTECTED_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+
+  // ---- CORTO-CIRCUITO: sesión demo (cookie firmada por SESSION_SECRET) ----
+  // Se evalúa ANTES de tocar Supabase Auth. En no-producción, la presencia de la
+  // cookie demo es suficiente para dejar pasar hacia /admin y /terminal, sin
+  // consultar `supabase.auth.getUser()` (que de lo contrario invalida el token
+  // local y provoca el bucle de redirección). La validación criptográfica real
+  // de la cookie ocurre en las Route Handlers (Node runtime).
+  if (!isProduction && hasDemoSession(request)) {
+    // Autenticado demo: redirigir fuera de /login y /register.
+    if (pathname === "/login" || pathname === "/register") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    // Dejar pasar a /admin, /terminal y el resto sin consultar Supabase.
+    return NextResponse.next();
+  }
+
   // Sin Supabase configurado: no hay sesión real que refrescar/proteger en Edge.
   if (!isSupabaseConfigured()) {
     return NextResponse.next();
@@ -63,17 +85,8 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isProtected = PROTECTED_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
-
-  // En no-producción, la cookie demo es una señal válida de sesión (el servidor
-  // la valida de nuevo). En producción la identidad demo nunca cuenta.
-  const demoAuthenticated = !isProduction && hasDemoSession(request);
-  const authenticated = Boolean(user) || demoAuthenticated;
-
   // Usuario autenticado que visita /login o /register: ir al panel (evita bucles).
-  if (authenticated && (pathname === "/login" || pathname === "/register")) {
+  if (user && (pathname === "/login" || pathname === "/register")) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     url.search = "";
@@ -81,7 +94,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Ruta protegida sin sesión: redirigir a /login.
-  if (!authenticated && isProtected) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

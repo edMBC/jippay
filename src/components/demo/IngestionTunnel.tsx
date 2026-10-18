@@ -129,13 +129,13 @@ export function IngestionTunnel() {
       {/* Mockup del canal */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
         {tunnel === "whatsapp" && (
-          <WhatsAppMockup path={path} />
+          <WhatsAppMockup path={path} onExtract={() => void extractAndInject()} extracting={extracting} />
         )}
         {tunnel === "email" && (
-          <EmailMockup path={path} />
+          <EmailMockup path={path} onExtract={() => void extractAndInject()} extracting={extracting} />
         )}
         {tunnel === "erp" && (
-          <ErpMockup path={path} />
+          <ErpMockup path={path} onExtract={() => void extractAndInject()} extracting={extracting} />
         )}
       </div>
 
@@ -195,7 +195,7 @@ export function IngestionTunnel() {
   );
 }
 
-function WhatsAppMockup({ path }: { path: Path }) {
+function WhatsAppMockup({ path, onExtract, extracting }: { path: Path; onExtract: () => void; extracting: boolean }) {
   const good = path === "A";
   return (
     <div className="space-y-2">
@@ -210,21 +210,26 @@ function WhatsAppMockup({ path }: { path: Path }) {
           ? "Hola equipo, adjunto factura correspondiente a la OC-2026-889 por $450.00"
           : "Les reenvío esta factura INV-204 que parece ya registrada. ¿La confirman?"}
       </div>
-      <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+      <button
+        type="button"
+        onClick={onExtract}
+        disabled={extracting}
+        className="flex w-full items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left transition-colors hover:border-zinc-600 disabled:opacity-60"
+      >
         <FileText className="h-4 w-4 text-zinc-500" />
         <span className="font-mono text-[11px] text-zinc-300">
           {good ? "INV-204.pdf (148 KB)" : "INV-204_DUPLICADO.pdf (148 KB)"}
         </span>
         <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-400">
-          <CheckCircle2 className="h-3 w-3" />
-          webhook
+          {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+          {extracting ? "escaneando" : "webhook"}
         </span>
-      </div>
+      </button>
     </div>
   );
 }
 
-function EmailMockup({ path }: { path: Path }) {
+function EmailMockup({ path, onExtract, extracting }: { path: Path; onExtract: () => void; extracting: boolean }) {
   const good = path === "A";
   return (
     <div className="space-y-2">
@@ -240,10 +245,16 @@ function EmailMockup({ path }: { path: Path }) {
         {good ? "Asunto: Factura INV-204 · Servicios de desarrollo" : "Asunto: RE: Factura duplicada"}
       </div>
       <div className="flex flex-wrap gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-[10px] text-zinc-300">
+        <button
+          type="button"
+          onClick={onExtract}
+          disabled={extracting}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-600 disabled:opacity-60"
+        >
           <FileText className="h-3.5 w-3.5" />
           Factura_Fiscal_094.pdf
-        </span>
+          {extracting && <Loader2 className="h-3 w-3 animate-spin" />}
+        </button>
         <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 font-mono text-[10px] text-zinc-400">
           <FileText className="h-3.5 w-3.5" />
           XML_SENIAT_DIAN.xml
@@ -253,7 +264,7 @@ function EmailMockup({ path }: { path: Path }) {
   );
 }
 
-function ErpMockup({ path }: { path: Path }) {
+function ErpMockup({ path, onExtract, extracting }: { path: Path; onExtract: () => void; extracting: boolean }) {
   const good = path === "A";
   const payload = good
     ? `{ "invoice_id": "INV-204", "vendor": "DevCorp", "amount": 450.00, "po_ref": "PO-889" }`
@@ -264,9 +275,16 @@ function ErpMockup({ path }: { path: Path }) {
         <Database className="h-3.5 w-3.5 text-emerald-400" />
         Webhook de sincronización (Odoo / a2 / QuickBooks)
       </div>
-      <pre className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 font-mono text-[10px] leading-5 text-zinc-300">
-        {payload}
-      </pre>
+      <button
+        type="button"
+        onClick={onExtract}
+        disabled={extracting}
+        className="w-full text-left transition-opacity hover:opacity-90 disabled:opacity-60"
+      >
+        <pre className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 font-mono text-[10px] leading-5 text-zinc-300">
+          {payload}
+        </pre>
+      </button>
     </div>
   );
 }
