@@ -15,6 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 const PROTECTED_PREFIXES = ["/admin", "/terminal"];
+const DEMO_SESSION_COOKIE = "jippay_session";
 
 function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -22,8 +23,14 @@ function isSupabaseConfigured(): boolean {
   );
 }
 
+/** Presencia de la cookie demo firmada (señal blanda; la validación real ocurre en el servidor). */
+function hasDemoSession(request: NextRequest): boolean {
+  return Boolean(request.cookies.get(DEMO_SESSION_COOKIE)?.value);
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isProduction = process.env.NODE_ENV === "production";
 
   // Sin Supabase configurado: no hay sesión real que refrescar/proteger en Edge.
   if (!isSupabaseConfigured()) {
@@ -60,8 +67,13 @@ export async function proxy(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
+  // En no-producción, la cookie demo es una señal válida de sesión (el servidor
+  // la valida de nuevo). En producción la identidad demo nunca cuenta.
+  const demoAuthenticated = !isProduction && hasDemoSession(request);
+  const authenticated = Boolean(user) || demoAuthenticated;
+
   // Usuario autenticado que visita /login o /register: ir al panel (evita bucles).
-  if (user && (pathname === "/login" || pathname === "/register")) {
+  if (authenticated && (pathname === "/login" || pathname === "/register")) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     url.search = "";
@@ -69,7 +81,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Ruta protegida sin sesión: redirigir a /login.
-  if (!user && isProtected) {
+  if (!authenticated && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

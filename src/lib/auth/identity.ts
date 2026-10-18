@@ -90,7 +90,8 @@ export async function resolveRequestIdentity(
 ): Promise<VerifiedIdentity | null> {
   const production = process.env.NODE_ENV === "production";
 
-  // 1. Supabase Auth (verificación real en servidor).
+  // 1. Supabase Auth (verificación real en servidor). Si hay sesión válida,
+  //    es la identidad autoritativa.
   if (isSupabaseConfigured()) {
     const supabaseUser = await getSupabaseUser(request);
     if (supabaseUser) {
@@ -100,11 +101,11 @@ export async function resolveRequestIdentity(
         provider: "supabase",
       };
     }
-    // Supabase configurado pero sesión ausente/inválida: fallo seguro (no cae a demo).
-    return null;
   }
 
-  // 2. Demo local (solo no-producción).
+  // 2. Demo local (solo no-producción). Se permite aunque Supabase esté
+  //    configurado, para no romper el sandbox de desarrollo/demo. En producción
+  //    nunca se emite identidad demo.
   if (!production) {
     const demoUser = getSessionUser(request.headers.get("cookie"));
     if (demoUser) {

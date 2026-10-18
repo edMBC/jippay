@@ -115,7 +115,7 @@ export default function LoginPage() {
 
       <div className="mt-8">
         <h2 className="mb-3 text-center text-sm font-medium text-zinc-300">
-          1-Click SOX Role Sandbox
+          Accesos Rápidos de Demostración (1-Click)
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {ROLE_OPTIONS.map((role) => (

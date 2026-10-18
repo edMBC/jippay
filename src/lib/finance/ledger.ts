@@ -182,6 +182,19 @@ export interface TransactionalLedger {
   /** Siembra una membresía (solo desarrollo/tests). */
   seedMembership(companyId: string, userEmail: string, role: string): Promise<void>;
 
+  /**
+   * Provisiona una membresía con un `authUserId` explícito (identidad real de
+   * Supabase Auth). Idempotente: no sobrescribe una membresía ya existente con
+   * la misma identidad estable. Útil para el auto-provisionamiento de usuarios
+   * que iniciaron sesión pero aún no tienen fila en `company_memberships`.
+   */
+  provisionMembership(
+    companyId: string,
+    userEmail: string,
+    authUserId: string,
+    role: string,
+  ): Promise<void>;
+
   /** Devuelve la membresía activa de un usuario autenticado (por ID estable). */
   getActiveMembershipByAuthUser(authUserId: string): Promise<CompanyMembership | null>;
 

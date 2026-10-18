@@ -24,7 +24,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ROLE_OPTIONS: { value: UserRole; label: string; email: string }[] = [
-  { value: "CFO_ADMIN", label: "CFO Admin", email: "cfo@jippay.us" },
-  { value: "CONTROLLER_APPROVER", label: "Controller Approver", email: "controller@jippay.us" },
-  { value: "AUDITOR_VIEWER", label: "External Auditor", email: "auditor@jippay.us" },
+  { value: "CFO_ADMIN", label: "CFO", email: "cfo@jippay.us" },
+  { value: "CONTROLLER_APPROVER", label: "Controller / Approver", email: "controller@jippay.us" },
+  { value: "AUDITOR_VIEWER", label: "Auditor SOX", email: "auditor@jippay.us" },
 ];

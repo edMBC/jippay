@@ -16,6 +16,7 @@ import {
 import { defaultCompanyRules, sampleRawInvoices } from "./mock-data";
 import type { AgentDecision, CompanyRules } from "./schemas";
 import type { SessionUser, UserRole } from "./auth/roles";
+import { DEMO_USERS } from "./auth/session";
 import { createSupabaseBrowserClient } from "./supabase/client";
 
 export type HumanAction = "APROBADO" | "RECHAZADO" | null;
@@ -456,28 +457,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    // 1. Intento con Supabase Auth (browser client) si está configurado.
-    const supabase = createSupabaseBrowserClient();
-    if (supabase) {
-      try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (!error) {
-          // La sesión ya está en cookies; refresca la identidad mapeada a membresía.
-          const meRes = await fetch("/api/auth/me");
-          if (meRes.ok) {
-            const data = (await meRes.json()) as { user: SessionUser | null };
-            if (data.user) {
-              setUser(data.user);
-              return data.user;
+    const normalizedEmail = email.trim().toLowerCase();
+    const isDemoAccount = Boolean(DEMO_USERS[normalizedEmail]);
+    const isMasterDemoPassword = password === "jippay2026";
+
+    // Enrutamiento híbrido: las cuentas demo oficiales (o la contraseña maestra
+    // de demo) van directamente al fallback local, sin chocar con Supabase Auth.
+    if (!isDemoAccount && !isMasterDemoPassword) {
+      const supabase = createSupabaseBrowserClient();
+      if (supabase) {
+        try {
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (!error) {
+            const meRes = await fetch("/api/auth/me");
+            if (meRes.ok) {
+              const data = (await meRes.json()) as { user: SessionUser | null };
+              if (data.user) {
+                setUser(data.user);
+                return data.user;
+              }
             }
           }
+        } catch {
+          // Error de red o del proveedor: se cae al fallback demo de abajo.
         }
-      } catch {
-        // Error de red o del proveedor: se cae al fallback demo de abajo.
       }
     }
 
-    // 2. Fallback demo local (cuando no hay Supabase o el login Supabase falla).
+    // Fallback demo local: emite la cookie de sesión firmada (SESSION_SECRET).
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

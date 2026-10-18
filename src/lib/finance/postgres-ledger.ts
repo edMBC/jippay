@@ -336,6 +336,23 @@ export class PostgresTransactionalLedger implements TransactionalLedger {
     );
   }
 
+  async provisionMembership(
+    companyId: string,
+    userEmail: string,
+    authUserId: string,
+    role: string,
+  ): Promise<void> {
+    const pool = await getPool();
+    // Idempotente por identidad estable (auth_user_id): no sobrescribe una
+    // membresía existente con la misma identidad.
+    await pool.query(
+      `INSERT INTO company_memberships(company_id, user_email, auth_user_id, role, status)
+         VALUES ($1,$2,$3,$4,'active')
+         ON CONFLICT (company_id, user_email) DO NOTHING`,
+      [companyId, userEmail, authUserId, role],
+    );
+  }
+
   async getCompany(companyId: string): Promise<Company | null> {
     const pool = await getPool();
     const { rows } = await pool.query(`SELECT id, name, created_at FROM companies WHERE id=$1`, [companyId]);

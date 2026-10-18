@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { ArrowRight, Settings2 } from "lucide-react";
 import { KeynoteDemo } from "@/components/demo/KeynoteDemo";
+import { IngestionTunnel } from "@/components/demo/IngestionTunnel";
 
 export default function DemoPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
+      <div className="mx-auto w-full max-w-5xl px-4 pb-10 sm:px-6">
+        <IngestionTunnel />
+      </div>
       <KeynoteDemo />
       <div className="flex flex-col items-center gap-4 pb-14">
         <Link

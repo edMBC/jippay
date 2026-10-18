@@ -134,6 +134,31 @@ export class InMemoryTransactionalLedger implements TransactionalLedger {
     });
   }
 
+  async provisionMembership(
+    companyId: string,
+    userEmail: string,
+    authUserId: string,
+    role: string,
+  ): Promise<void> {
+    return this.mutex.runExclusive(async () => {
+      const s = this.state(companyId);
+      // Idempotente por identidad estable: no sobrescribe una membresía existente.
+      for (const m of s.memberships.values()) {
+        if (m.authUserId === authUserId) return;
+      }
+      s.memberships.set(userEmail, {
+        companyId,
+        userEmail,
+        authUserId,
+        role,
+        status: "active",
+        createdAt: this.nowIso(),
+        updatedAt: this.nowIso(),
+        provisionedBy: null,
+      });
+    });
+  }
+
   async getCompany(companyId: string): Promise<Company | null> {
     return this.mutex.runExclusive(async () => this.states.get(companyId)?.company ?? null);
   }
