@@ -169,7 +169,7 @@ export function KeynoteDemo() {
       {stage > 0 && (
         <div className="space-y-6">
           {/* Telemetría superior: pulso multicanal */}
-          <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl">
             <div className="mb-3 flex items-center justify-between">
               <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
                 Live ingestion stream
@@ -284,7 +284,7 @@ export function KeynoteDemo() {
           </div>
 
           {/* Pie: motor determinista + controles + What-If */}
-          <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <BrainCircuit className="h-4 w-4 text-zinc-400" />

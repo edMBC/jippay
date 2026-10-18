@@ -4,7 +4,7 @@ import { KeynoteDemo } from "@/components/demo/KeynoteDemo";
 
 export default function DemoPage() {
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-zinc-950">
       <KeynoteDemo />
       <div className="flex flex-col items-center gap-4 pb-14">
         <Link

@@ -202,6 +202,7 @@ html[data-theme="light"] .text-zinc-600 {
 /* Bordes */
 html[data-theme="light"] .border-zinc-700,
 html[data-theme="light"] .border-zinc-800,
+html[data-theme="light"] .border-zinc-800\/80,
 html[data-theme="light"] .border-white\/\[0\.06\],
 html[data-theme="light"] .border-white\/\[0\.08\] {
   border-color: #e4e4e7;
