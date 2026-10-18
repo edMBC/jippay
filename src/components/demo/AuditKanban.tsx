@@ -36,7 +36,7 @@ interface BatchItem {
   raw: string;
 }
 
-interface AuditRow {
+export interface AuditKanbanItem {
   key: string;
   channel: string;
   invoice: Invoice;
@@ -146,7 +146,7 @@ function csvCell(value: unknown): string {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function exportCsv(rows: AuditRow[]) {
+function exportCsv(rows: AuditKanbanItem[]) {
   const header = [
     "invoice_id",
     "emisor",
@@ -189,7 +189,7 @@ function exportCsv(rows: AuditRow[]) {
   );
 }
 
-function exportJson(rows: AuditRow[]) {
+function exportJson(rows: AuditKanbanItem[]) {
   const payload = rows.map((r) => ({
     invoice: r.invoice,
     channel: r.channel,
@@ -206,7 +206,7 @@ function exportPdf() {
   window.print();
 }
 
-export function AuditKanban() {
+export function AuditKanban({ items }: { items?: AuditKanbanItem[] }) {
   const { rules } = useStore();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [justifications, setJustifications] = useState<Record<string, string>>({});
@@ -214,7 +214,13 @@ export function AuditKanban() {
   const [liquidated, setLiquidated] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const rows = useMemo<AuditRow[]>(() => {
+  const rows = useMemo<AuditKanbanItem[]>(() => {
+    // Si el llamador aporta ítems ya evaluados, se usan tal cual (permite que el
+    // wizard del demo alimente el tablero con sus propios resultados).
+    if (items !== undefined) return items;
+
+    // Vitrina autónoma: lote fijo multicanal procesado secuencialmente por el
+    // motor real para que el duplicado se frene de forma determinista.
     const processedIds: string[] = [];
     return BATCH.map((item) => {
       const invoice = finalizeDeterministicExtraction(
@@ -232,7 +238,7 @@ export function AuditKanban() {
       processedIds.push(invoice.id);
       return { key: item.key, channel: item.channel, invoice, decision };
     });
-  }, [rules]);
+  }, [items, rules]);
 
   const columns = useMemo(
     () =>
@@ -246,7 +252,7 @@ export function AuditKanban() {
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const sign = (row: AuditRow) => {
+  const sign = (row: AuditKanbanItem) => {
     const note = (justifications[row.key] ?? "").trim();
     if (note.length < 8) return;
     setSigned((prev) => ({

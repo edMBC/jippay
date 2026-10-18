@@ -4,7 +4,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  BrainCircuit,
   Camera,
   CheckCircle2,
   Database,
@@ -34,6 +33,7 @@ import type { AgentDecision, Invoice } from "@/lib/schemas";
 import { useStore } from "@/lib/store";
 import { useSourceConfigs } from "@/lib/source-configs";
 import { SourceConfigModal, type ConfigSourceId } from "@/components/demo/SourceConfigModal";
+import { AuditKanban, type AuditKanbanItem } from "@/components/demo/AuditKanban";
 import { IOSGlassCard } from "@/components/ui/IOSGlassCard";
 import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
 
@@ -153,7 +153,6 @@ export function DemoWizard() {
 
   // Paso 4 — auditoría y veredicto.
   const [results, setResults] = useState<DemoResult[]>([]);
-  const [justifications, setJustifications] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [erpSynced, setErpSynced] = useState<string | null>(null);
   const [syncingErp, setSyncingErp] = useState(false);
@@ -440,28 +439,24 @@ export function DemoWizard() {
     }
   }
 
-  function submitHumanAction(id: string, action: "APROBADO" | "RECHAZADO") {
-    const justification = (justifications[id] ?? "").trim();
-    if (justification.length < 10) {
-      setErrors((prev) => ({ ...prev, [id]: "Justificación mínima: 10 caracteres." }));
-      return;
-    }
-    setResults((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, humanAction: action, justification, decision: { ...r.decision, approved_by: "demo" } }
-          : r,
-      ),
-    );
-    setErrors((prev) => ({ ...prev, [id]: "" }));
-  }
-
   function goToStep(next: Step) {
     setStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const escaladas = results.filter((r) => r.decision.estado === "ESCALAR" && r.humanAction === null);
+  // Tablero Kanban del cierre SOX: alimentado por los resultados reales del
+  // wizard (no por un lote estático). Cuando aún no hay resultados, el tablero
+  // se muestra vacío en sus 3 columnas.
+  const kanbanItems: AuditKanbanItem[] = useMemo(
+    () =>
+      results.map((r) => ({
+        key: r.id,
+        channel: r.source,
+        invoice: r.invoice,
+        decision: r.decision,
+      })),
+    [results],
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -1162,135 +1157,9 @@ export function DemoWizard() {
               </div>
             </div>
 
-            {/* Registro de ingesta */}
+            {/* Cierre de Auditoría SOX — Tablero Kanban */}
             <div className="mt-6">
-              <div className="flex items-center gap-2">
-                <BrainCircuit className="h-4 w-4 text-zinc-400" />
-                <h3 className="text-sm font-medium text-zinc-300">Registro de ingesta</h3>
-              </div>
-
-              {results.length === 0 ? (
-                <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-500">
-                  Aún sin facturas. Conecta una fuente e ingiere documentos.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  {results.map((r) => (
-                    <div
-                      key={r.id}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition-all duration-200"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className="font-mono text-xs text-zinc-400">{r.invoice.id}</span>
-                          <p className="truncate text-sm text-zinc-200">
-                            {r.invoice.emisor} · $
-                            {r.invoice.monto_usd ?? r.invoice.monto}
-                          </p>
-                        </div>
-                        <IOSStatusBadge estado={r.decision.estado} />
-                      </div>
-                      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{r.decision.razon}</p>
-
-                      {r.decision.three_way_match && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {(
-                            [
-                              ["Proveedor", r.decision.three_way_match.vendor_match],
-                              ["Acuerdo", r.decision.three_way_match.agreement_match],
-                              ["Liquidez", r.decision.three_way_match.budget_liquidity_match],
-                            ] as const
-                          ).map(([label, ok]) => (
-                            <span
-                              key={label}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                ok
-                                  ? "bg-zinc-800 text-zinc-300"
-                                  : "border border-zinc-700 text-zinc-500"
-                              }`}
-                            >
-                              {ok ? (
-                                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                              ) : (
-                                <X className="h-3 w-3 text-zinc-500" />
-                              )}
-                              {label}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {r.decision.traza_evaluacion && r.decision.traza_evaluacion.length > 0 && (
-                        <details className="mt-2 text-xs">
-                          <summary className="cursor-pointer text-zinc-500 hover:text-zinc-300">
-                            Traza de validación
-                          </summary>
-                          <ul className="mt-2 space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 font-mono text-[10px] leading-relaxed text-zinc-500">
-                            {r.decision.traza_evaluacion.map((t, i) => (
-                              <li key={i}>{t}</li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-
-                      {r.decision.estado === "ESCALAR" && r.humanAction === null && (
-                        <div className="mt-3 border-t border-zinc-800 pt-3">
-                          <textarea
-                            value={justifications[r.id] ?? ""}
-                            onChange={(e) =>
-                              setJustifications((prev) => ({ ...prev, [r.id]: e.target.value }))
-                            }
-                            rows={2}
-                            placeholder="Nota de justificación (mín. 10 caracteres)"
-                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
-                          />
-                          {errors[r.id] && (
-                            <p className="mt-1 text-[11px] text-amber-400">{errors[r.id]}</p>
-                          )}
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => submitHumanAction(r.id, "APROBADO")}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-950 transition-all duration-200 hover:bg-zinc-200"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Aprobar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => submitHumanAction(r.id, "RECHAZADO")}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-all duration-200 hover:text-zinc-200"
-                            >
-                              <XCircle className="h-3.5 w-3.5" />
-                              Frenar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {r.humanAction && (
-                        <div className="mt-2 flex items-center gap-1.5 text-xs">
-                          {r.humanAction === "APROBADO" ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                          ) : (
-                            <X className="h-3.5 w-3.5 text-zinc-500" />
-                          )}
-                          <span className="text-zinc-400">
-                            {r.humanAction === "APROBADO" ? "Aprobado para pago" : "Frenado"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {escaladas.length > 0 && (
-                <p className="mt-4 text-center text-[11px] text-zinc-600">
-                  {escaladas.length} excepción{escaladas.length === 1 ? "" : "es"} pendiente
-                  {escaladas.length === 1 ? "" : "s"} de supervisión.
-                </p>
-              )}
+              <AuditKanban items={kanbanItems} />
             </div>
 
             {/* Exportación y sincronización ERP */}
@@ -1366,7 +1235,6 @@ export function DemoWizard() {
                 type="button"
                 onClick={() => {
                   setResults([]);
-                  setJustifications({});
                   setErrors({});
                   setConnected(false);
                   setEmailLinked(false);
