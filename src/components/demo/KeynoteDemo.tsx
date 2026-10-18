@@ -18,6 +18,7 @@ import { deterministicExtract, finalizeDeterministicExtraction } from "@/lib/ext
 import type { CompanyRules } from "@/lib/schemas";
 import { useStore } from "@/lib/store";
 import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
+import { AuditList } from "@/components/demo/AuditList";
 
 /**
  * Keynote escénica del demo: una secuencia cinemática autoejecutable que
@@ -25,21 +26,26 @@ import { IOSStatusBadge } from "@/components/ui/IOSStatusBadge";
  * veredictos estáticos. Cada factura se extrae y evalúa con las reglas vigentes.
  */
 
-const SOURCES = [
+/** Canales de ingesta unificados (Inbox Multicanal), sin cards duplicadas. */
+const CHANNELS = [
+  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { id: "email", label: "Email IMAP", icon: Mail },
   { id: "odoo", label: "Odoo", icon: Database },
   { id: "quickbooks", label: "QuickBooks", icon: Database },
   { id: "a2", label: "a2 ERP", icon: Database },
-  { id: "correo", label: "Correo", icon: Mail },
-  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { id: "erp", label: "ERP Sync", icon: Database },
 ] as const;
 
+type ChannelId = (typeof CHANNELS)[number]["id"];
+
 /** Raw data entrante por canal: lo que Jippay lee sin intervención humana. */
-const RAW_PAYLOADS: Record<(typeof SOURCES)[number]["id"], string> = {
+const RAW_PAYLOADS: Record<ChannelId, string> = {
+  whatsapp: '{ "from": "+58412...", "attachment": "invoice.pdf", "type": "image/pdf" }',
+  email: "Subject: OC-2026-889 · Attachments: 1 PDF (INV-204.pdf)",
   odoo: '{ "invoice_id": "INV-204", "vendor": "DevCorp", "amount": 450.00, "po_ref": "PO-889" }',
   quickbooks: '{ "txn_id": "INV-204", "payee": "DevCorp", "total": 450.00, "account": "AP" }',
   a2: '{ "documento": "INV-204", "proveedor": "DevCorp", "monto": 450.00, "asiento": "A-1042" }',
-  correo: "Subject: OC-2026-889 · Attachments: 1 PDF (INV-204.pdf)",
-  whatsapp: '{ "from": "+58412...", "attachment": "invoice.pdf", "type": "image/pdf" }',
+  erp: '{ "source": "odoo/a2/qb", "event": "invoice.created", "invoice_id": "INV-204", "po_ref": "PO-889" }',
 };
 
 type Stage = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -64,6 +70,7 @@ export function KeynoteDemo() {
   const { rules, updateRules } = useStore();
   const [stage, setStage] = useState<Stage>(0);
   const [playing, setPlaying] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelId | null>(null);
   const [whatIf, setWhatIf] = useState({
     budgetDrop: false,
     removeProvider: false,
@@ -87,6 +94,7 @@ export function KeynoteDemo() {
   const reset = () => {
     setPlaying(false);
     setStage(0);
+    setSelectedChannel(null);
     setWhatIf({ budgetDrop: false, removeProvider: false, lowerThreshold: false });
   };
 
@@ -148,8 +156,16 @@ export function KeynoteDemo() {
     );
   }
 
-  const activeSource =
-    stage >= 2 ? SOURCES[(stage - 2) % SOURCES.length] : null;
+  // Canal resaltado durante la secuencia automática (avanza por los 6 canales).
+  const autoChannel =
+    stage >= 2
+      ? CHANNELS[Math.min(stage - 2, CHANNELS.length - 1)]
+      : null;
+
+  // La selección manual del usuario manda; si no hay, se usa la secuencia auto.
+  const activeChannel = selectedChannel
+    ? CHANNELS.find((c) => c.id === selectedChannel) ?? null
+    : autoChannel;
 
   return (
     <div className="mx-auto w-full max-w-5xl overflow-x-hidden px-4 py-8 sm:px-8 sm:py-10">
@@ -180,51 +196,60 @@ export function KeynoteDemo() {
 
       {stage > 0 && (
         <div className="space-y-6">
-          {/* Telemetría superior: pulso multicanal */}
-          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl">
+          {/* Inbox Multicanal unificado: tabs + raw data (sin cards duplicadas) */}
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 backdrop-blur-md sm:p-6">
             <div className="mb-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-                Live ingestion stream
-              </span>
+              <div>
+                <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+                  Inbox Multicanal
+                </span>
+                <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-950">
+                  6
+                </span>
+              </div>
               <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400">
                 <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-emerald-400" />
-                {playing && stage < 8 ? "capturando…" : "en línea"}
+                {playing && stage < 8 ? "capturando…" : "zero-touch"}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {SOURCES.map((s, i) => {
-                const Icon = s.icon;
-                const lit = stage >= 2 && (playing ? i <= (stage - 2) % SOURCES.length : true);
+
+            {/* Barra de pestañas horizontal (scroll en móvil) */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {CHANNELS.map((c) => {
+                const Icon = c.icon;
+                const active = activeChannel?.id === c.id;
                 return (
-                  <div
-                    key={s.id}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-300 ${
-                      lit
-                        ? "border-zinc-600 bg-zinc-900 text-zinc-200"
-                        : "border-zinc-800 bg-zinc-950 text-zinc-600"
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedChannel(c.id)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all duration-200 ${
+                      active
+                        ? "border-zinc-500 bg-zinc-900 text-zinc-100"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
                     }`}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-xs">{s.label}</span>
-                  </div>
+                    <Icon className="h-4 w-4" />
+                    {c.label}
+                  </button>
                 );
               })}
             </div>
 
-            {/* Raw data entrante del canal activo (el "Aha Moment") */}
-            {activeSource && (
+            {/* RAW DATA ENTRANTE del canal activo */}
+            {activeChannel && (
               <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3">
                 <div className="flex items-center gap-2">
                   {(() => {
-                    const Icon = activeSource.icon;
+                    const Icon = activeChannel.icon;
                     return <Icon className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
                   })()}
                   <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-                    {activeSource.label} · raw data entrante
+                    {activeChannel.label} · raw data entrante
                   </span>
                 </div>
                 <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-emerald-400/80">
-                  {RAW_PAYLOADS[activeSource.id]}
+                  {RAW_PAYLOADS[activeChannel.id]}
                 </pre>
               </div>
             )}
@@ -312,6 +337,9 @@ export function KeynoteDemo() {
               )}
             </div>
           </div>
+
+          {/* Cierre de auditoría: lista densa de registros procesados */}
+          <AuditList />
 
           {/* Pie: motor determinista + controles + What-If */}
           <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 backdrop-blur-xl sm:p-6">

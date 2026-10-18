@@ -5,9 +5,12 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Database,
   Download,
   Fingerprint,
   Lock,
+  Mail,
+  MessageCircle,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
@@ -103,6 +106,18 @@ function formatTs(iso: string, offsetSec: number): string {
   const t = new Date(new Date(iso).getTime() + offsetSec * 1000);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}`;
+}
+
+/** Icono por canal de entrada (para la columna "Canal" de la lista). */
+function ChannelIcon({ channel }: { channel: string }) {
+  const lower = channel.toLowerCase();
+  const Icon =
+    lower.includes("whatsapp") || lower.includes("chat")
+      ? MessageCircle
+      : lower.includes("email") || lower.includes("correo") || lower.includes("imap")
+        ? Mail
+        : Database;
+  return <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />;
 }
 
 function buildAuditEntries(d: AgentDecision): string[] {
@@ -303,13 +318,14 @@ export function AuditList({ items }: { items?: AuditListItem[] }) {
 
       {/* Lista de registros */}
       <div className="overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900/40">
-        {/* Cabecera de columnas */}
-        <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_90px_110px_28px] gap-3 border-b border-zinc-800/80 px-4 py-2.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:grid">
-          <span>ID</span>
-          <span>Proveedor</span>
-          <span className="text-right">Monto</span>
-          <span>Estado</span>
-          <span />
+        {/* Cabecera de columnas (solo escritorio) */}
+        <div className="hidden items-center gap-3 border-b border-zinc-800/80 px-4 py-2.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500 md:flex">
+          <span className="min-w-0 flex-1">ID</span>
+          <span className="min-w-0 flex-[1.4]">Proveedor</span>
+          <span className="min-w-0 flex-1">Canal</span>
+          <span className="w-24 text-right">Monto</span>
+          <span className="w-28">Estado</span>
+          <span className="w-5" />
         </div>
 
         {rows.length === 0 ? (
@@ -322,6 +338,14 @@ export function AuditList({ items }: { items?: AuditListItem[] }) {
             const signature = signed[row.key];
             const status = STATUS[row.decision.estado];
             const StatusIcon = status.icon;
+            const badge = (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${status.className}`}
+              >
+                <StatusIcon className="h-3 w-3" />
+                {status.label}
+              </span>
+            );
             return (
               <div
                 key={row.key}
@@ -330,25 +354,50 @@ export function AuditList({ items }: { items?: AuditListItem[] }) {
                 <button
                   type="button"
                   onClick={() => toggle(row.key)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_90px_110px_28px] items-center gap-3 bg-zinc-900/50 px-4 py-3 text-left transition-colors hover:bg-zinc-800/50"
+                  className="flex w-full items-center gap-3 bg-zinc-900/50 px-4 py-3 text-left transition-colors hover:bg-zinc-800/50"
                 >
-                  <span className="truncate font-mono text-xs text-zinc-300">
-                    {row.invoice.id}
-                  </span>
-                  <span className="truncate text-sm font-medium text-zinc-200">
-                    {row.invoice.emisor}
-                  </span>
-                  <span className="truncate text-right font-mono text-sm text-zinc-100">
-                    ${row.invoice.monto_usd ?? row.invoice.monto}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${status.className}`}
-                  >
-                    <StatusIcon className="h-3 w-3" />
-                    {status.label}
-                  </span>
+                  {/* Vista móvil: apilada y compacta */}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 md:hidden">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono text-xs text-zinc-300">
+                        {row.invoice.id}
+                      </span>
+                      {badge}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium text-zinc-200">
+                        {row.invoice.emisor}
+                      </span>
+                      <span className="shrink-0 font-mono text-sm text-zinc-100">
+                        ${row.invoice.monto_usd ?? row.invoice.monto}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                      <ChannelIcon channel={row.channel} />
+                      <span className="truncate">{row.channel}</span>
+                    </div>
+                  </div>
+
+                  {/* Vista escritorio: columnas alineadas con la cabecera */}
+                  <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-300">
+                      {row.invoice.id}
+                    </span>
+                    <span className="min-w-0 flex-[1.4] truncate text-sm font-medium text-zinc-200">
+                      {row.invoice.emisor}
+                    </span>
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs text-zinc-400">
+                      <ChannelIcon channel={row.channel} />
+                      <span className="truncate">{row.channel}</span>
+                    </span>
+                    <span className="w-24 shrink-0 text-right font-mono text-sm text-zinc-100">
+                      ${row.invoice.monto_usd ?? row.invoice.monto}
+                    </span>
+                    <span className="w-28 shrink-0">{badge}</span>
+                  </div>
+
                   <ChevronDown
-                    className={`h-4 w-4 text-zinc-600 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`h-4 w-4 shrink-0 text-zinc-600 transition-transform ${isOpen ? "rotate-180" : ""}`}
                   />
                 </button>
 
